@@ -24,6 +24,9 @@ extern "C" {
 #include <string_view>
 #include <vector>
 #include <SDL3/SDL.h>
+#if defined(KHDAYS_UWP)
+#include <SDL3/SDL_system.h>
+#endif
 
 namespace {
 
@@ -203,10 +206,17 @@ extern "C" int khdays_rom_init(void)
 #if defined(KHDAYS_UWP)
     // UWP / Xbox Dev Mode: check for extracted data transferred to LocalState
     if (!found) {
+        const char *local = SDL_GetWinRTFSPath(SDL_WINRT_PATH_LOCAL_FOLDER);
+        if (local != nullptr) {
+            found = khdays::vfs::autodetect_data_root(fs::path(local) / "data" / "extracted") ||
+                    khdays::vfs::autodetect_data_root(fs::path(local) / "extracted");
+        }
+    }
+    if (!found) {
         char *pref = SDL_GetPrefPath(NULL, "khdays");
         if (pref != nullptr) {
-            fs::path uwp_extracted = fs::path(pref) / "data" / "extracted";
-            found = khdays::vfs::autodetect_data_root(uwp_extracted);
+            found = khdays::vfs::autodetect_data_root(fs::path(pref) / "data" / "extracted") ||
+                    khdays::vfs::autodetect_data_root(fs::path(pref) / "extracted");
             SDL_free(pref);
         }
     }

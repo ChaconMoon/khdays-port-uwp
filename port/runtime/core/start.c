@@ -22,6 +22,9 @@
 #include "../../host/app/host.h"
 
 #include <SDL3/SDL.h>
+#if defined(KHDAYS_UWP)
+#include <SDL3/SDL_system.h>
+#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -142,6 +145,16 @@ static char working_folder_note[1024];
  * and saves/ lie beside it. Started where data/extracted is (the repository's root), nothing changes. */
 static void take_working_folder(void)
 {
+#if defined(KHDAYS_UWP)
+    const char *local = SDL_GetWinRTFSPath(SDL_WINRT_PATH_LOCAL_FOLDER);
+    if (local != NULL && change_folder(local) == 0) {
+        snprintf(working_folder_note, sizeof(working_folder_note),
+                 "working folder: UWP LocalState %s", local);
+    } else {
+        snprintf(working_folder_note, sizeof(working_folder_note),
+                 "working folder: default UWP");
+    }
+#else
     const char *own = SDL_GetBasePath();
     if (SDL_GetPathInfo("data/extracted", NULL)) {
         snprintf(working_folder_note, sizeof(working_folder_note),
@@ -153,6 +166,7 @@ static void take_working_folder(void)
         snprintf(working_folder_note, sizeof(working_folder_note),
                  "working folder: the one it was started in, without data/extracted (its own could not be taken)");
     }
+#endif
     fprintf(stderr, "khdays-native: %s\n", working_folder_note);
 }
 
@@ -184,7 +198,11 @@ static void attach_parent_console(void)
 #endif
 }
 
+#if defined(KHDAYS_UWP)
+int SDL_main(int argc, char **argv)
+#else
 int main(int argc, char **argv)
+#endif
 {
     /* first: claim the DS's address ranges before anything else (the symbol handler, SDL) allocates
      * there */

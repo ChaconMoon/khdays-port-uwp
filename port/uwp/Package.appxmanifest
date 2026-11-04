@@ -34,7 +34,7 @@
   <Applications>
     <Application Id="App"
       Executable="khdays-native.exe"
-      EntryPoint="khdays-native.App">
+      EntryPoint="khdays.App">
       <uap:VisualElements
         DisplayName="Kingdom Hearts 358/2 Days"
         Description="Kingdom Hearts 358/2 Days Native Port for Xbox"
