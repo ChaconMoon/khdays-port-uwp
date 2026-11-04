@@ -48,7 +48,9 @@ void khdays_log_open(void)
     static int registered;
     const char *setting = getenv("KHDAYS_LOG");
     int on = InterlockedCompareExchange(&wanted, 0, 0) != 0;
-#if defined(_DEBUG)
+#if defined(KHDAYS_UWP)
+    on = 1; /* Always enable session log on UWP for diagnostic via Device Portal */
+#elif defined(_DEBUG)
     on = on || setting == NULL || strcmp(setting, "0") != 0;
 #else
     on = on || (setting != NULL && strcmp(setting, "1") == 0);

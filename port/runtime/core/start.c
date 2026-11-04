@@ -204,6 +204,23 @@ int SDL_main(int argc, char **argv)
 int main(int argc, char **argv)
 #endif
 {
+#if defined(KHDAYS_UWP)
+    /* UWP / Xbox Dev Mode: redirect stderr and stdout to khdays_boot.log in LocalState */
+    const char *local_dir = SDL_GetWinRTFSPath(SDL_WINRT_PATH_LOCAL_FOLDER);
+    if (local_dir != NULL) {
+        char boot_log_path[512];
+        FILE *log_fp = NULL;
+        snprintf(boot_log_path, sizeof(boot_log_path), "%s\\khdays_boot.log", local_dir);
+        if (freopen_s(&log_fp, boot_log_path, "w", stderr) == 0 && log_fp != NULL) {
+            setvbuf(stderr, NULL, _IONBF, 0);
+        }
+        if (freopen_s(&log_fp, boot_log_path, "a", stdout) == 0 && log_fp != NULL) {
+            setvbuf(stdout, NULL, _IONBF, 0);
+        }
+        fprintf(stderr, "=== khdays-native Xbox UWP boot log ===\n");
+    }
+#endif
+
     /* first: claim the DS's address ranges before anything else (the symbol handler, SDL) allocates
      * there */
     if (!khdays_memory_map()) {
