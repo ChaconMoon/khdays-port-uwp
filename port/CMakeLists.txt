@@ -40,7 +40,13 @@ set(DECOMP "${CMAKE_CURRENT_SOURCE_DIR}/../external/khdays-decomp")
 # Optimized code keeps its frame pointers: the crash and stall reports walk
 # the stack by them (diag.c).
 add_compile_options($<$<AND:$<CONFIG:Release>,$<NOT:$<COMPILE_LANGUAGE:ASM_MASM>>>:/Oy->)
-add_compile_options($<$<NOT:$<COMPILE_LANGUAGE:ASM_MASM>>:/sdl- /wd4146 /wd4700>)
+if(MSVC)
+    add_compile_options(
+        $<$<NOT:$<COMPILE_LANGUAGE:ASM_MASM>>:/sdl->
+        $<$<NOT:$<COMPILE_LANGUAGE:ASM_MASM>>:/wd4146>
+        $<$<NOT:$<COMPILE_LANGUAGE:ASM_MASM>>:/wd4700>
+    )
+endif()
 # The C library's portable functions (getenv, fopen, sscanf...), not MSVC's _s versions of them.
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
