@@ -570,15 +570,9 @@ set_source_files_properties(runtime/core/text_patches.cpp PROPERTIES COMPILE_OPT
 target_include_directories(khdays-native PRIVATE "${KHDAYS_GEN}")
 target_include_directories(khdays-native PRIVATE "${stb_SOURCE_DIR}" "${cgltf_SOURCE_DIR}" "${pl_mpeg_SOURCE_DIR}"
                                                   "${ufbx_SOURCE_DIR}")
-if(KHDAYS_UWP)
-    target_compile_options(khdays-native PRIVATE
-        $<$<COMPILE_LANGUAGE:C>:/W4 /std:c17>
-        $<$<COMPILE_LANGUAGE:CXX>:/W4 /std:c++17 /EHsc>)
-else()
-    target_compile_options(khdays-native PRIVATE
-        $<$<COMPILE_LANGUAGE:C>:/W4 /std:c17>
-        $<$<COMPILE_LANGUAGE:CXX>:/W4 /std:c++20 /EHsc>)
-endif()
+target_compile_options(khdays-native PRIVATE
+    $<$<COMPILE_LANGUAGE:C>:/W4 /std:c17>
+    $<$<COMPILE_LANGUAGE:CXX>:/W4 /std:c++20 /EHsc>)
 
 # Media Foundation (host/movies/movie_hd_win.c): Windows' own libraries.
 # ufbx, as it is: third-party, not held to the port's warnings.
@@ -590,7 +584,6 @@ target_link_libraries(khdays-native PRIVATE khdays-mobiclip)
 if(KHDAYS_UWP)
     # UWP / Xbox Dev Mode: link WindowsApp umbrella library, disable desktop delay-loading
     target_sources(khdays-native PRIVATE uwp/main_uwp.cpp)
-    set_source_files_properties(uwp/main_uwp.cpp PROPERTIES COMPILE_OPTIONS "/ZW")
     set_target_properties(khdays-native PROPERTIES VS_GLOBAL_ROOTNAMESPACE "khdays")
 
     target_link_libraries(khdays-native PRIVATE khdays-gfx khdays-gpu khdays-sound khdays-host-input SDL3::SDL3
