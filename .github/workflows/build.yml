@@ -33,16 +33,25 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install pycparser
 
-      - name: Cache generated sources (prepare.py)
+      - name: Restore generated sources cache (prepare.py)
         id: cache-gen
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: build/port/gen-x64
           key: khdays-gen-x64-${{ hashFiles('external/khdays-decomp/**', 'port/tools/**') }}
+          restore-keys: |
+            khdays-gen-x64-
 
       - name: Run prepare.py (generate native C sources)
         if: steps.cache-gen.outputs.cache-hit != 'true'
         run: python port/tools/prepare.py --out build/port/gen-x64
+
+      - name: Save generated sources cache immediately
+        if: steps.cache-gen.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build/port/gen-x64
+          key: ${{ steps.cache-gen.outputs.cache-primary-key || format('khdays-gen-x64-{0}', hashFiles('external/khdays-decomp/**', 'port/tools/**')) }}
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
@@ -93,6 +102,7 @@ jobs:
           $outPkgDir = Join-Path $pwd "package-output\"
 
           msbuild build-uwp/khdays-native.vcxproj /t:Rebuild `
+            -maxcpucount `
             /p:Configuration=Release `
             /p:Platform=x64 `
             /p:AppxBundle=Never `
