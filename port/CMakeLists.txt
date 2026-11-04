@@ -5,6 +5,14 @@
 cmake_minimum_required(VERSION 3.25)
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)  # /Z7: no shared PDB to contend on
 project(khdays_native C CXX ASM_MASM)
+option(KHDAYS_UWP "Build for Universal Windows Plataform (Xbox)" OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "WindowsStore" OR KHDAYS_UWP)
+set(KHDAYS_UWP ON CACHE BOOL "" FORCE)
+add_compile_definitions(KHDAYS_UWP=1)
+        
+endif()
+
+
 if(WIN32)
     enable_language(RC)  # the executable icon (resources/game.rc)
 endif()
@@ -35,20 +43,29 @@ add_compile_options($<$<AND:$<CONFIG:Release>,$<NOT:$<COMPILE_LANGUAGE:ASM_MASM>
 # The C library's portable functions (getenv, fopen, sscanf...), not MSVC's _s versions of them.
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
+
 # The window: SDL3, static.
 include(FetchContent)
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-    SDL3
-    URL
-        https://github.com/libsdl-org/SDL/releases/download/release-3.4.12/SDL3-3.4.12.tar.gz
-    URL_HASH
-        SHA256=f07b958a9ac5020fb7a44cadb957f658b2149c3c8abb4f63145fac9303249db7
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-)
+if(KHDAYS_UWP)
+    FetchContent_Declare(
+        SDL3
+        GIT_REPOSITORY https://github.com/XboxEmulationHub/SDL3-uwp.git
+        GIT_TAG main
+    )
+else()
+    FetchContent_Declare(
+        SDL3
+        URL
+            https://github.com/libsdl-org/SDL/releases/download/release-3.4.12/SDL3-3.4.12.tar.gz
+        URL_HASH
+            SHA256=f07b958a9ac5020fb7a44cadb957f658b2149c3c8abb4f63145fac9303249db7
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+endif()
 FetchContent_MakeAvailable(SDL3)
 
 # PNG in and out (the HD replacements and the graphics dump): stb, at the
@@ -535,6 +552,17 @@ target_compile_options(khdays-native PRIVATE
 add_library(khdays-ufbx STATIC "${ufbx_SOURCE_DIR}/ufbx.c")
 target_link_libraries(khdays-native PRIVATE khdays-ufbx)
 target_link_libraries(khdays-native PRIVATE khdays-lua)
+
+if(KHDAYS_UWP)
+    # UWP / Xbox Dev Mode: link WindowsApp umbrella library, disable desktop delay-loading
+    target_link_libraries(khdays-native PRIVATE khdays-gfx khdays-gpu khdays-sound khdays-host-input SDL3::SDL3
+                          mfplat mfreadwrite mfuuid ole32 ws2_32 WindowsApp)
+    target_link_options(khdays-native PRIVATE
+        /DEBUG
+        /INCREMENTAL:NO)
+else()
+
+
 target_link_libraries(khdays-native PRIVATE khdays-gfx khdays-gpu khdays-sound khdays-host-input SDL3::SDL3 dbghelp winmm delayimp
                       mfplat mfreadwrite mfuuid ole32 ws2_32 iphlpapi advapi32 winhttp)
 # The DS's own addresses are held, inaccessible, first thing in main
@@ -555,6 +583,7 @@ target_link_options(khdays-native PRIVATE
     /SUBSYSTEM:WINDOWS
     /ENTRY:mainCRTStartup)
 
+endif()
 # Renders a DeSmuME savestate's display state and compares it with what
 # DeSmuME showed (port/tools/savestate_gpu.py extracts the input).
 add_executable(khdays-gpu-test tests/savestate_test.c)
