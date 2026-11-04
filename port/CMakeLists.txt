@@ -379,7 +379,26 @@ khdays_embed_text(scenes_port "${CMAKE_CURRENT_SOURCE_DIR}/movies/hd_scenes.txt"
 # The Stop magic's numbers and words the game never made (runtime/battle/stop_magic.txt), the same way.
 khdays_embed_text(stop_magic_text "${CMAKE_CURRENT_SOURCE_DIR}/runtime/battle/stop_magic.txt")
 
+set(KHDAYS_UWP_FILES "")
+if(KHDAYS_UWP)
+    set(KHDAYS_UWP_MANIFEST "uwp/Package.appxmanifest")
+    set(KHDAYS_UWP_ASSETS
+        "uwp/Assets/Square150x150Logo.png"
+        "uwp/Assets/Square44x44Logo.png"
+        "uwp/Assets/Wide310x150Logo.png"
+        "uwp/Assets/SplashScreen.png"
+        "uwp/Assets/StoreLogo.png"
+    )
+    set_property(SOURCE ${KHDAYS_UWP_MANIFEST} PROPERTY VS_DEPLOYMENT_CONTENT 1)
+    foreach(asset ${KHDAYS_UWP_ASSETS})
+        set_property(SOURCE "${asset}" PROPERTY VS_DEPLOYMENT_CONTENT 1)
+        set_property(SOURCE "${asset}" PROPERTY VS_DEPLOYMENT_LOCATION "Assets")
+    endforeach()
+    set(KHDAYS_UWP_FILES ${KHDAYS_UWP_MANIFEST} ${KHDAYS_UWP_ASSETS})
+endif()
+
 add_executable(khdays-native
+    ${KHDAYS_UWP_FILES}
     resources/game.rc   # the executable's icon (port/resources/game.ico)
     $<TARGET_OBJECTS:khdays-game>
     $<TARGET_OBJECTS:khdays-mobiclip>

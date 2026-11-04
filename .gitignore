@@ -21,6 +21,7 @@ compile_commands.json
 
 # Local game data — never commit
 /data/
+/setup/
 /roms/
 /assets-extracted/
 /generated/
