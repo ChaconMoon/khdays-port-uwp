@@ -37,7 +37,7 @@ def main(sdl_dir):
 
     d3d12_c = os.path.join(sdl_dir, "src", "gpu", "d3d12", "SDL_gpu_d3d12.c")
 
-    # 1. ResizeBuffers: avoid invalid flags on CoreWindow
+    # 1. ResizeBuffers: avoid invalid flags on CoreWindow (and avoid #ifdef inside C macro call)
     patch_file(
         d3d12_c,
         """    // Resize the swapchain
@@ -48,18 +48,21 @@ def main(sdl_dir):
         0, // use client window height
         DXGI_FORMAT_UNKNOWN, // Keep the old format
         renderer->supportsTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);""",
-        """    // Resize the swapchain
+        """    Uint32 resizeFlags = 0;
+#ifndef SDL_PLATFORM_WINRT
+    if (renderer->supportsTearing) {
+        resizeFlags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    }
+#endif
+
+    // Resize the swapchain
     HRESULT res = IDXGISwapChain_ResizeBuffers(
         windowData->swapchain,
         0, // Keep buffer count the same
         0, // use client window width
         0, // use client window height
         DXGI_FORMAT_UNKNOWN, // Keep the old format
-#ifdef SDL_PLATFORM_WINRT
-        0);
-#else
-        renderer->supportsTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);
-#endif"""
+        resizeFlags);"""
     )
 
     # 2. CreateSwapchain: use IDXGIFactory2_CreateSwapChainForCoreWindow on WinRT
