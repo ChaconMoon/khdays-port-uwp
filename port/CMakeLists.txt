@@ -40,6 +40,7 @@ set(DECOMP "${CMAKE_CURRENT_SOURCE_DIR}/../external/khdays-decomp")
 # Optimized code keeps its frame pointers: the crash and stall reports walk
 # the stack by them (diag.c).
 add_compile_options($<$<AND:$<CONFIG:Release>,$<NOT:$<COMPILE_LANGUAGE:ASM_MASM>>>:/Oy->)
+add_compile_options($<$<NOT:$<COMPILE_LANGUAGE:ASM_MASM>>:/sdl- /wd4146 /wd4700>)
 # The C library's portable functions (getenv, fopen, sscanf...), not MSVC's _s versions of them.
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
@@ -343,6 +344,7 @@ target_compile_options(khdays-host-input PRIVATE
 # numbers. Struct members align to at most 4 bytes as mwcc lays them out (/Zp4); mwcc's -char signed
 # -enum int are MSVC's own (docs/BUILD.md, "Compiler settings worth knowing").
 add_library(khdays-game OBJECT ${KHDAYS_REWRITTEN})
+set_target_properties(khdays-game PROPERTIES VS_GLOBAL_AppxPackage "false")
 target_include_directories(khdays-game PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/compat" "${KHDAYS_GEN}")
 target_compile_options(khdays-game PRIVATE /W0 /Zp4 /std:c17)
 
@@ -351,9 +353,10 @@ target_compile_options(khdays-game PRIVATE /W0 /Zp4 /std:c17)
 # payload): what the port calls for a movie's frame instead of the payload
 # copied to the ITCM.
 set(MOBICLIP_PORTABLE "${DECOMP}/libs/mobiclip/video/portable")
-add_library(khdays-mobiclip OBJECT
+add_library(khdays-mobiclip STATIC
     "${MOBICLIP_PORTABLE}/mobiclip_frame_core.cpp"
     "${MOBICLIP_PORTABLE}/mobiclip_reference.cpp")
+set_target_properties(khdays-mobiclip PROPERTIES VS_GLOBAL_AppxPackage "false")
 target_include_directories(khdays-mobiclip PRIVATE "${MOBICLIP_PORTABLE}")
 target_compile_options(khdays-mobiclip PRIVATE /std:c++20 /EHsc)
 
@@ -401,7 +404,6 @@ add_executable(khdays-native
     ${KHDAYS_UWP_FILES}
     resources/game.rc   # the executable's icon (port/resources/game.ico)
     $<TARGET_OBJECTS:khdays-game>
-    $<TARGET_OBJECTS:khdays-mobiclip>
     runtime/core/arm7.c
     runtime/core/pxi.c
     runtime/core/boot.c
@@ -571,6 +573,7 @@ target_compile_options(khdays-native PRIVATE
 add_library(khdays-ufbx STATIC "${ufbx_SOURCE_DIR}/ufbx.c")
 target_link_libraries(khdays-native PRIVATE khdays-ufbx)
 target_link_libraries(khdays-native PRIVATE khdays-lua)
+target_link_libraries(khdays-native PRIVATE khdays-mobiclip)
 
 if(KHDAYS_UWP)
     # UWP / Xbox Dev Mode: link WindowsApp umbrella library, disable desktop delay-loading

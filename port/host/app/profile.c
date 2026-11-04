@@ -745,7 +745,7 @@ static void read_binding(Reader *r, const char *key, char *value, const char *li
         }
         p->input[r->device][r->layer][action][s] = KHDAYS_NO_INPUT;
     }
-    for (char *item = value, *next; item != NULL && *item != '\0'; item = next) {
+    for (char *item = value, *next = NULL; item != NULL && *item != '\0'; item = next) {
         char *comma = strchr(item, ',');
         int input;
         next = comma != NULL ? comma + 1 : NULL;
@@ -1243,7 +1243,7 @@ static int read_text(Reader *r, char *text, size_t size)
     if ((unsigned char)text[0] == 0xef && (unsigned char)text[1] == 0xbb && (unsigned char)text[2] == 0xbf) {
         text += 3; /* a UTF-8 byte order mark */
     }
-    for (char *line = text, *next; line != NULL; line = next) {
+    for (char *line = text, *next = NULL; line != NULL; line = next) {
         char *equals, *key, *value, *original;
         next = strchr(line, '\n');
         if (next != NULL) {

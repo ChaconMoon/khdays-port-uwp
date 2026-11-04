@@ -86,19 +86,22 @@ jobs:
           New-Item -ItemType Directory -Force -Path "package-output"
           Export-Certificate -Cert $cert -FilePath "package-output/khdays-xbox.cer" | Out-Null
           Export-PfxCertificate -Cert $cert -FilePath "UwpAutoSignCert.pfx" -Password $securePassword | Out-Null
+          Copy-Item "UwpAutoSignCert.pfx" -Destination "build-uwp/UwpAutoSignCert.pfx" -Force
 
           # 4. Compilar y empaquetar con MSBuild
+          $pfxPath = Join-Path $pwd "UwpAutoSignCert.pfx"
+          $outPkgDir = Join-Path $pwd "package-output\"
+
           msbuild build-uwp/khdays-native.vcxproj /t:Rebuild `
             /p:Configuration=Release `
             /p:Platform=x64 `
-            /p:AppxPackage=true `
             /p:AppxBundle=Never `
             /p:UapAppxPackageBuildMode=SideloadOnly `
             /p:AppxPackageSigningEnabled=true `
             /p:PackageCertificateThumbprint=$thumbprint `
-            /p:PackageCertificateKeyFile="UwpAutoSignCert.pfx" `
+            /p:PackageCertificateKeyFile=$pfxPath `
             /p:PackageCertificatePassword=$certPassword `
-            /p:AppxPackageDir="${{ github.workspace }}/package-output/"
+            /p:AppxPackageDir=$outPkgDir
 
           # 5. Limpiar certificado del almacén del runner
           Remove-Item "Cert:\CurrentUser\My\$thumbprint" -Force

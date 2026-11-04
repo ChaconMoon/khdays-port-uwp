@@ -90,8 +90,8 @@ void func_01ff81a0(void)
 {
     OSThreadInfo *info = &data_02044330;
     u32 thread = IRQ_THREAD_QUEUE[0];
-    u32 next;
-    u32 current;
+    u32 next = 0;
+    u32 current = 0;
     if (thread != 0) {
         do {
             THREAD_STATE(thread) = 1; /* OS_THREAD_STATE_READY */
