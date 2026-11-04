@@ -12,6 +12,10 @@
     Version="1.0.0.0"
     ProcessorArchitecture="x64" />
 
+  <mp:PhoneIdentity
+    PhoneProductId="c96f56b2-a4bb-48f8-8e91-fd5e4f3cd455"
+    PhonePublisherId="00000000-0000-0000-0000-000000000000" />
+
   <Properties>
     <DisplayName>Kingdom Hearts 358/2 Days</DisplayName>
     <PublisherDisplayName>ChaconMoon</PublisherDisplayName>
