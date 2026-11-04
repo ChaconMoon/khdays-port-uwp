@@ -533,18 +533,15 @@ static SDL_Window *open_window(const KhdaysProfile *profile)
     return SDL_CreateWindow("Kingdom Hearts 358/2 Days (native)", w, h, SDL_WINDOW_RESIZABLE);
 }
 
-/* The window's thread: opens everything, then handles SDL's events until the
- * window closes. */
-static int host_thread(void *unused)
+static SDL_Window *host_window_ptr;
+static SDL_Renderer *host_renderer_ptr;
+
+static int khdays_host_init_core(void)
 {
-    SDL_Window *window;
-    SDL_Renderer *renderer;
     KhdaysProfile profile;
-    (void)unused;
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "host: SDL_Init failed: %s\n", SDL_GetError());
-        SDL_SignalSemaphore(ready);
-        return 1;
+        return 0;
     }
     khdays_sound_output_open();
     {
@@ -559,26 +556,30 @@ static int host_thread(void *unused)
         khdays_savelist_set_settings(profile.save.all_files, profile.save.autosave);
         khdays_stop_set_enabled(profile.gameplay.stop_magic); /* for this run: a change waits for the next */
     }
-    window = open_window(&profile);
-    host_window = window;
+    host_window_ptr = open_window(&profile);
+    host_window = host_window_ptr;
     display_now(profile.video.display);
     khdays_present_set_video(&profile.video);
-    renderer = window ? khdays_present_open(window, notice) : NULL;
+    host_renderer_ptr = host_window_ptr ? khdays_present_open(host_window_ptr, notice) : NULL;
     frame_event = SDL_RegisterEvents(3);
     close_event = frame_event + 1;
     wake_event = frame_event + 2;
-    if (renderer == NULL || frame_event == 0) {
+    if (host_renderer_ptr == NULL || frame_event == 0) {
         fprintf(stderr, "host: cannot open the window: %s\n", SDL_GetError());
-        SDL_SignalSemaphore(ready);
-        return 1;
+        return 0;
     }
     khdays_devices_init(&profile, publish);
     khdays_settings_set_graphics_card(khdays_present_gpu());
     tell_game();
     khdays_updates_start(profile.network.check_updates); /* in the background; told of on the title */
     SDL_SetAtomicInt(&started, 1);
-    SDL_SignalSemaphore(ready);
+    return 1;
+}
 
+static int khdays_host_event_loop(void)
+{
+    SDL_Window *window = host_window_ptr;
+    SDL_Renderer *renderer = host_renderer_ptr;
     for (;;) {
         SDL_Event event;
         /* While the settings menu shows, it keeps animating even if the paused
@@ -711,6 +712,7 @@ static int host_thread(void *unused)
             khdays_camp_screen_renderer_gone();
             khdays_movie_pause_renderer_gone();
             renderer = khdays_present_event(&event, &renewed);
+            host_renderer_ptr = renderer;
             khdays_settings_set_graphics_card(khdays_present_gpu());
             tell_game();
             redraw(window, renderer);
@@ -781,6 +783,26 @@ static int host_thread(void *unused)
     }
 }
 
+#if defined(KHDAYS_UWP)
+int khdays_host_run_uwp(void)
+{
+    return khdays_host_event_loop();
+}
+#endif
+
+/* The window's thread: opens everything, then handles SDL's events until the
+ * window closes. */
+static int host_thread(void *unused)
+{
+    (void)unused;
+    if (!khdays_host_init_core()) {
+        SDL_SignalSemaphore(ready);
+        return 1;
+    }
+    SDL_SignalSemaphore(ready);
+    return khdays_host_event_loop();
+}
+
 void khdays_host_tell_no_data(const char *where, const char *broken)
 {
     const int language = khdays_language_of_system();
@@ -838,11 +860,22 @@ int khdays_host_start(void)
     }
     ready = SDL_CreateSemaphore(0);
     closed = SDL_CreateSemaphore(0);
+#if defined(KHDAYS_UWP)
+    /* On UWP, window creation and event pumping MUST happen on the main UI thread.
+     * CoreWindow::GetForCurrentThread() throws RPC_E_WRONG_THREAD (0x8001010e) from worker threads.
+     * We initialize the window here on the UI thread, and the main thread later runs
+     * the event loop via khdays_host_run_uwp(). */
+    if (!khdays_host_init_core()) {
+        return 0;
+    }
+    return 1;
+#else
     if (ready == NULL || closed == NULL || SDL_CreateThread(host_thread, "host", NULL) == NULL) {
         return 0;
     }
     SDL_WaitSemaphore(ready);
     return SDL_GetAtomicInt(&started) != 0;
+#endif
 }
 
 void khdays_host_close(void)

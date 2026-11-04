@@ -199,6 +199,20 @@ static void attach_parent_console(void)
 }
 
 #if defined(KHDAYS_UWP)
+static int game_worker_entry(void *unused)
+{
+    (void)unused;
+    KhdaysContext *game = khdays_context_create(run_game, NULL);
+    if (game == NULL) {
+        khdays_hal_unimplemented("no context for the game");
+    }
+    khdays_context_switch(game);
+    khdays_hal_unimplemented("the game's context switched back to the worker thread");
+    return 0;
+}
+#endif
+
+#if defined(KHDAYS_UWP)
 int SDL_main(int argc, char **argv)
 #else
 int main(int argc, char **argv)
@@ -259,6 +273,18 @@ int main(int argc, char **argv)
     khdays_log_open();
     khdays_log("%s", working_folder_note);
     khdays_log("the game's memory at %p (its references from there)", (void *)khdays_window);
+#if defined(KHDAYS_UWP)
+    /* On UWP, WinRT requires the Main UI thread to run the window event loop.
+     * We spawn the game execution context on a background worker thread, while the UI thread
+     * enters khdays_host_run_uwp(). */
+    SDL_Thread *game_thread = SDL_CreateThread(game_worker_entry, "game_thread", NULL);
+    if (game_thread == NULL) {
+        fprintf(stderr, "khdays-native: failed to create game worker thread: %s\n", SDL_GetError());
+        return 1;
+    }
+    SDL_DetachThread(game_thread);
+    return khdays_host_run_uwp();
+#else
     {
         /* The game runs on a context whose stack is in its memory (memory.c), so its locals are reached
          * by reference too. */
@@ -269,6 +295,7 @@ int main(int argc, char **argv)
         khdays_context_switch(game);
         khdays_hal_unimplemented("the game's context switched back to the process's");
     }
+#endif
 }
 
 /* The firmware and crt0, then the game's main, on the game's context: at the start, or after a reset

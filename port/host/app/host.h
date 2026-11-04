@@ -11,6 +11,11 @@ typedef struct KhdaysFramePackage KhdaysFramePackage; /* runtime/display/frame_p
 /* Opens the window, unless KHDAYS_HEADLESS is set. Returns 0 on failure. */
 int khdays_host_start(void);
 
+#if defined(KHDAYS_UWP)
+/* On UWP, runs the host event loop on the main UI thread. */
+int khdays_host_run_uwp(void);
+#endif
+
 /* The game's data cannot be used (runtime/core/rom.cpp), before the port stops: the player told, in the
  * system's language, on stderr and in a message box (none when headless). `where` the folder
  * searched or the data's; `broken` NULL when there is no data there, else what is wrong with it. */
