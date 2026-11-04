@@ -23,6 +23,7 @@ extern "C" {
 #include <string>
 #include <string_view>
 #include <vector>
+#include <SDL3/SDL.h>
 
 namespace {
 
@@ -198,7 +199,19 @@ void read_region(KhdaysRomReader &reader, const Region &r, u32 offset, u8 *out, 
 
 extern "C" int khdays_rom_init(void)
 {
-    if (!khdays::vfs::autodetect_data_root()) {
+    bool found = khdays::vfs::autodetect_data_root();
+#if defined(KHDAYS_UWP)
+    // UWP / Xbox Dev Mode: check for extracted data transferred to LocalState
+    if (!found) {
+        char *pref = SDL_GetPrefPath(NULL, "khdays");
+        if (pref != nullptr) {
+            fs::path uwp_extracted = fs::path(pref) / "data" / "extracted";
+            found = khdays::vfs::autodetect_data_root(uwp_extracted);
+            SDL_free(pref);
+        }
+    }
+#endif
+    if (!found) {
         std::error_code ec;
         const fs::path searched = fs::absolute("data/extracted", ec);
         std::fprintf(stderr, "rom: no extracted data under data/extracted\n");
