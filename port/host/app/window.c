@@ -535,6 +535,21 @@ static SDL_Window *open_window(const KhdaysProfile *profile)
 
 static SDL_Window *host_window_ptr;
 static SDL_Renderer *host_renderer_ptr;
+static KhdaysSound host_sound_settings;
+
+#if defined(KHDAYS_UWP)
+static int audio_init_worker(void *unused)
+{
+    (void)unused;
+    fprintf(stderr, "host: background audio worker starting...\n");
+    fflush(stderr);
+    khdays_sound_output_open();
+    khdays_sound_output_set(&host_sound_settings);
+    fprintf(stderr, "host: background audio worker finished\n");
+    fflush(stderr);
+    return 0;
+}
+#endif
 
 static int khdays_host_init_core(void)
 {
@@ -544,8 +559,7 @@ static int khdays_host_init_core(void)
         fprintf(stderr, "host: SDL_Init failed: %s\n", SDL_GetError());
         return 0;
     }
-    fprintf(stderr, "host: SDL_Init succeeded, opening audio...\n");
-    khdays_sound_output_open();
+    fprintf(stderr, "host: SDL_Init succeeded\n");
     {
         /* The player's settings (or the defaults, the first time). Read first,
          * so that the window speaks the player's language. */
@@ -553,6 +567,7 @@ static int khdays_host_init_core(void)
         khdays_settings_path(path, sizeof(path));
         khdays_profile_load(&profile, path, notice);
         khdays_ui_set_language(khdays_language_choose(profile.language));
+        host_sound_settings = profile.sound;
         khdays_sound_output_set(&profile.sound);
         khdays_log_want(profile.session_log);
         khdays_savelist_set_settings(profile.save.all_files, profile.save.autosave);
@@ -578,6 +593,19 @@ static int khdays_host_init_core(void)
     tell_game();
     khdays_updates_start(profile.network.check_updates); /* in the background; told of on the title */
     SDL_SetAtomicInt(&started, 1);
+#if defined(KHDAYS_UWP)
+    {
+        SDL_Thread *audio_thread = SDL_CreateThread(audio_init_worker, "audio_worker", NULL);
+        if (audio_thread != NULL) {
+            SDL_DetachThread(audio_thread);
+        } else {
+            fprintf(stderr, "host: could not spawn audio worker: %s, falling back to sync\n", SDL_GetError());
+            khdays_sound_output_open();
+        }
+    }
+#else
+    khdays_sound_output_open();
+#endif
     fprintf(stderr, "host: initialization complete, ready for event loop\n");
     return 1;
 }

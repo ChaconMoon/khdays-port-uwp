@@ -96,17 +96,24 @@ void khdays_host_audio_float(const float *frames, int count)
 void khdays_sound_output_open(void)
 {
     SDL_AudioSpec device;
+    fprintf(stderr, "host: calling SDL_OpenAudioDeviceStream...\n");
+    fflush(stderr);
     SDL_AudioStream *stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &input, NULL, NULL);
     if (stream == NULL) {
         fprintf(stderr, "host: no sound: %s\n", SDL_GetError());
+        fflush(stderr);
         return;
     }
+    fprintf(stderr, "host: SDL_OpenAudioDeviceStream succeeded\n");
+    fflush(stderr);
     device_rate =
         SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(stream), &device, NULL) && device.freq > 0 ? device.freq : 0;
     SDL_SetAtomicInt(&needs_lead, 1);
     apply_gain(stream);
     SDL_ResumeAudioStreamDevice(stream);
     SDL_SetAtomicPointer(&audio, stream);
+    fprintf(stderr, "host: audio output active at %d Hz\n", device_rate);
+    fflush(stderr);
 }
 
 void khdays_sound_output_set(const KhdaysSound *settings)
