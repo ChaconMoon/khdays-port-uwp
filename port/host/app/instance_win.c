@@ -8,9 +8,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <SDL3/SDL.h>
 
-static int slot;        /* 0 until a slot is taken */
-static char folder[64]; /* "saves" or "saves/player<N>" */
+static int slot;         /* 0 until a slot is taken */
+static char folder[512]; /* "saves", "saves/player<N>" o ruta LocalState en UWP */
 
 /* Tries to take slot `number`. Returns 1 if it is ours now (its lock stays
  * open), or 0 if another copy holds it. If the system cannot make the lock at
@@ -58,6 +59,21 @@ int khdays_host_player_slot_taken(void)
 
 const char *khdays_host_user_folder(void)
 {
+#if defined(KHDAYS_UWP)
+    /* UWP / Xbox Dev Mode: the app package directory is read-only; redirect saves/ to LocalState */
+    if (folder[0] == '\0') {
+        char *pref = SDL_GetPrefPath(NULL, "khdays");
+        if (pref != NULL) {
+            snprintf(folder, sizeof(folder), "%ssaves", pref);
+            SDL_free(pref);
+        } else {
+            snprintf(folder, sizeof(folder), "saves");
+        }
+        CreateDirectoryA(folder, NULL);
+    }
+    return folder;
+
+#else
     if (slot == 0) {
         return "saves"; /* no slot taken (the tools and tests): use slot 1's */
     }
@@ -72,10 +88,15 @@ const char *khdays_host_user_folder(void)
         }
     }
     return folder;
+#endif
 }
 
 int khdays_host_other_copies(void)
 {
+#if defined(KHDAYS_UWP)
+    /* Process snapshot scanning is restricted in UWP sandbox; only one instance runs on Xbox */
+    return 0;
+#else
     /* count the processes of the same executable, other than this one */
     wchar_t own[MAX_PATH];
     const wchar_t *own_name;
@@ -101,6 +122,7 @@ int khdays_host_other_copies(void)
     }
     CloseHandle(snapshot);
     return others > 0;
+#endif
 }
 
 /* "Player" and four digits from this machine: a hash of the computer's name
