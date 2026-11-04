@@ -278,15 +278,39 @@ def main(sdl_dir):
 #endif"""
     )
 
-    # 6. D3D12_CreateDevice dxgi load: bypass SDL_LoadObject(DXGI_DLL) on WinRT
+    # 6. D3D12_CreateDevice dxgi load: bypass SDL_LoadObject(DXGI_DLL) on WinRT (keep DXGI factory enabled!)
     patch_file(
         d3d12_c,
         """#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
     // Load the DXGI library
-    renderer->dxgi_dll = SDL_LoadObject(DXGI_DLL);""",
-        """#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES) || defined(SDL_PLATFORM_WINRT))
+    renderer->dxgi_dll = SDL_LoadObject(DXGI_DLL);
+    if (renderer->dxgi_dll == NULL) {
+        D3D12_INTERNAL_DestroyRenderer(renderer);
+        SET_STRING_ERROR_AND_RETURN("Could not find " DXGI_DLL, NULL);
+    }""",
+        """#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
+#if !defined(SDL_PLATFORM_WINRT)
     // Load the DXGI library
-    renderer->dxgi_dll = SDL_LoadObject(DXGI_DLL);"""
+    renderer->dxgi_dll = SDL_LoadObject(DXGI_DLL);
+    if (renderer->dxgi_dll == NULL) {
+        D3D12_INTERNAL_DestroyRenderer(renderer);
+        SET_STRING_ERROR_AND_RETURN("Could not find " DXGI_DLL, NULL);
+    }
+#endif"""
+    )
+
+    # 6b. Make CheckInterfaceSupport non-fatal for logging
+    patch_file(
+        d3d12_c,
+        """    res = IDXGIAdapter1_CheckInterfaceSupport(renderer->adapter, D3D_GUID(D3D_IID_IDXGIDevice), &umdVersion);
+    if (FAILED(res)) {
+        D3D12_INTERNAL_DestroyRenderer(renderer);
+        CHECK_D3D12_ERROR_AND_RETURN("Could not get adapter driver version", NULL);
+    }""",
+        """    res = IDXGIAdapter1_CheckInterfaceSupport(renderer->adapter, D3D_GUID(D3D_IID_IDXGIDevice), &umdVersion);
+    if (FAILED(res)) {
+        umdVersion.QuadPart = 0;
+    }"""
     )
 
     # 7. D3D12_CreateDevice CreateDXGIFactory1: direct assignment on WinRT
