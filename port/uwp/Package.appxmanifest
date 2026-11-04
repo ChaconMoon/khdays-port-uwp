@@ -49,7 +49,7 @@
 
   <Capabilities>
     <Capability Name="internetClient" />
-    <DeviceCapability Name="microphone" />
     <rescap:Capability Name="expandedResources" />
+    <DeviceCapability Name="microphone" />
   </Capabilities>
 </Package>
