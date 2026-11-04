@@ -37,7 +37,7 @@ def main(sdl_dir):
 
     d3d12_c = os.path.join(sdl_dir, "src", "gpu", "d3d12", "SDL_gpu_d3d12.c")
 
-    # 1. ResizeBuffers: avoid invalid flags on CoreWindow (and avoid #ifdef inside C macro call)
+    # 1. ResizeBuffers: specify explicit dimensions on WinRT and avoid invalid flags on CoreWindow
     patch_file(
         d3d12_c,
         """    // Resize the swapchain
@@ -49,7 +49,18 @@ def main(sdl_dir):
         DXGI_FORMAT_UNKNOWN, // Keep the old format
         renderer->supportsTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);""",
         """    Uint32 resizeFlags = 0;
-#ifndef SDL_PLATFORM_WINRT
+    Uint32 resizeWidth = 0;
+    Uint32 resizeHeight = 0;
+#ifdef SDL_PLATFORM_WINRT
+    int winW = 0, winH = 0;
+    SDL_GetWindowSizeInPixels(windowData->window, &winW, &winH);
+    if (winW <= 0 || winH <= 0) {
+        winW = 1920;
+        winH = 1080;
+    }
+    resizeWidth = (Uint32)winW;
+    resizeHeight = (Uint32)winH;
+#else
     if (renderer->supportsTearing) {
         resizeFlags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
     }
@@ -59,13 +70,38 @@ def main(sdl_dir):
     HRESULT res = IDXGISwapChain_ResizeBuffers(
         windowData->swapchain,
         0, // Keep buffer count the same
-        0, // use client window width
-        0, // use client window height
+        resizeWidth,
+        resizeHeight,
         DXGI_FORMAT_UNKNOWN, // Keep the old format
         resizeFlags);"""
     )
 
-    # 2. CreateSwapchain: use IDXGIFactory2_CreateSwapChainForCoreWindow on WinRT
+    # 1b. SupportsPresentMode: restrict to VSYNC on WinRT
+    patch_file(
+        d3d12_c,
+        """    switch (presentMode) {
+    case SDL_GPU_PRESENTMODE_IMMEDIATE:
+    case SDL_GPU_PRESENTMODE_VSYNC:
+        return true;
+    case SDL_GPU_PRESENTMODE_MAILBOX:
+#if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
+        return false;
+#else
+        return true;
+#endif""",
+        """    switch (presentMode) {
+    case SDL_GPU_PRESENTMODE_VSYNC:
+        return true;
+    case SDL_GPU_PRESENTMODE_IMMEDIATE:
+    case SDL_GPU_PRESENTMODE_MAILBOX:
+#if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES) || defined(SDL_PLATFORM_WINRT))
+        return false;
+#else
+        return true;
+#endif"""
+    )
+
+    # 2. CreateSwapchain: use IDXGIFactory2_CreateSwapChainForCoreWindow on WinRT with explicit dimensions & scaling
     patch_file(
         d3d12_c,
         """    if (renderer->supportsTearing) {
@@ -91,7 +127,19 @@ def main(sdl_dir):
         &swapchain);
     CHECK_D3D12_ERROR_AND_RETURN("Could not create swapchain", false);""",
         """#ifdef SDL_PLATFORM_WINRT
+    int coreW = 0, coreH = 0;
+    SDL_SyncWindow(windowData->window);
+    SDL_GetWindowSizeInPixels(windowData->window, &coreW, &coreH);
+    if (coreW <= 0 || coreH <= 0) {
+        coreW = 1920;
+        coreH = 1080;
+    }
+    swapchainDesc.Width = (Uint32)coreW;
+    swapchainDesc.Height = (Uint32)coreH;
+    swapchainDesc.Scaling = DXGI_SCALING_STRETCH;
+    swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
     swapchainDesc.Flags = 0;
+
     IUnknown *coreWindow = (IUnknown *)SDL_GetPointerProperty(SDL_GetWindowProperties(windowData->window), SDL_PROP_WINDOW_WINRT_WINDOW_POINTER, NULL);
     if (!coreWindow) {
         return false;
@@ -126,6 +174,62 @@ def main(sdl_dir):
         &swapchain);
     CHECK_D3D12_ERROR_AND_RETURN("Could not create swapchain", false);
 #endif"""
+    )
+
+    # 2b. SubmitCommandBuffer: log any IDXGISwapChain_Present failure and ensure valid flags on WinRT
+    patch_file(
+        d3d12_c,
+        """        // NOTE: flip discard always supported since DXGI 1.4 is required
+        Uint32 syncInterval = 1;
+        if (windowData->present_mode == SDL_GPU_PRESENTMODE_IMMEDIATE ||
+            windowData->present_mode == SDL_GPU_PRESENTMODE_MAILBOX) {
+            syncInterval = 0;
+        }
+
+        Uint32 presentFlags = 0;
+        if (renderer->supportsTearing &&
+            windowData->present_mode == SDL_GPU_PRESENTMODE_IMMEDIATE) {
+            presentFlags = DXGI_PRESENT_ALLOW_TEARING;
+        }
+
+        res = IDXGISwapChain_Present(
+            windowData->swapchain,
+            syncInterval,
+            presentFlags);
+        if (FAILED(res)) {
+            result = false;
+        }""",
+        """        // NOTE: flip discard always supported since DXGI 1.4 is required
+        Uint32 syncInterval = 1;
+#ifndef SDL_PLATFORM_WINRT
+        if (windowData->present_mode == SDL_GPU_PRESENTMODE_IMMEDIATE ||
+            windowData->present_mode == SDL_GPU_PRESENTMODE_MAILBOX) {
+            syncInterval = 0;
+        }
+
+        Uint32 presentFlags = 0;
+        if (renderer->supportsTearing &&
+            windowData->present_mode == SDL_GPU_PRESENTMODE_IMMEDIATE) {
+            presentFlags = DXGI_PRESENT_ALLOW_TEARING;
+        }
+#else
+        Uint32 presentFlags = 0;
+#endif
+
+        res = IDXGISwapChain_Present(
+            windowData->swapchain,
+            syncInterval,
+            presentFlags);
+        if (FAILED(res)) {
+            static Uint32 presentErrorLogged = 0;
+            if (presentErrorLogged++ < 10) {
+                SDL_LogError(
+                    SDL_LOG_CATEGORY_GPU,
+                    "D3D12: IDXGISwapChain_Present failed! Error Code: " HRESULT_FMT,
+                    res);
+            }
+            result = false;
+        }"""
     )
 
     # 3. MakeWindowAssociation: skip Win32 HWND association on WinRT
