@@ -61,7 +61,7 @@ if(KHDAYS_UWP)
     FetchContent_Declare(
         SDL3
         GIT_REPOSITORY https://github.com/XboxEmulationHub/SDL3-uwp.git
-        GIT_TAG release-uwp-3.4.12
+        GIT_TAG release-uwp-3.4.20
     )
 else()
     FetchContent_Declare(
@@ -584,7 +584,7 @@ target_link_libraries(khdays-native PRIVATE khdays-mobiclip)
 if(KHDAYS_UWP)
     # UWP / Xbox Dev Mode: link WindowsApp umbrella library, disable desktop delay-loading
     target_link_libraries(khdays-native PRIVATE khdays-gfx khdays-gpu khdays-sound khdays-host-input SDL3::SDL3
-                          mfplat mfreadwrite mfuuid ole32 ws2_32 WindowsApp)
+                          mfplat mfreadwrite mfuuid ole32 ws2_32 WindowsApp vccorlib)
     target_link_options(khdays-native PRIVATE
         /DEBUG
         /INCREMENTAL:NO)
