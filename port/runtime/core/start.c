@@ -168,6 +168,8 @@ static int std_handle_free(DWORD which)
  * A stream already sent somewhere (a file or a pipe: the walks, the tests) is left where it goes. */
 static void attach_parent_console(void)
 {
+#if !defined(KHDAYS_UWP)
+    /* UWP / Xbox Dev Mode: AttachConsole is unavailable in AppContainer sandbox */
     const int out = std_handle_free(STD_OUTPUT_HANDLE), err = std_handle_free(STD_ERROR_HANDLE),
               in = std_handle_free(STD_INPUT_HANDLE);
     if ((out || err || in) && AttachConsole(ATTACH_PARENT_PROCESS)) {
@@ -179,6 +181,7 @@ static void attach_parent_console(void)
         if (in)
             (void)freopen_s(&f, "CONIN$", "r", stdin);
     }
+#endif
 }
 
 int main(int argc, char **argv)
