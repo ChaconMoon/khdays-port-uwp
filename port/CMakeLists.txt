@@ -179,7 +179,8 @@ endif()
 # the executable as the font is.
 FetchContent_Declare(
     kenney_input_prompts
-    URL https://kenney.nl/media/pages/assets/input-prompts/8de120163f-1783763952/kenney_input-prompts_1.5.zip
+    URL "${CMAKE_CURRENT_SOURCE_DIR}/resources/kenney_input-prompts_1.5.zip"
+        https://web.archive.org/web/20261019165139id_/https://kenney.nl/media/pages/assets/input-prompts/8de120163f-1783763952/kenney_input-prompts_1.5.zip
     URL_HASH SHA256=ac2fcf599080b0f3ba2d174c9474db6df1a0e96ff0662580e2da79a122ab78a1
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     SOURCE_SUBDIR none
