@@ -355,7 +355,7 @@ def rewrite_all(
     naming every file that failed."""
     from .emit import Index
 
-    processes = processes or max(1, (os.cpu_count() or 2) - 1)
+    processes = processes or max(1, os.cpu_count() or 2)
     cache = gen / "references"
     cache.mkdir(parents=True, exist_ok=True)
     with ProcessPoolExecutor(processes, initializer=_init, initargs=(str(cache), tools_key(), arch)) as pool:

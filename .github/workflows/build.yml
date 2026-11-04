@@ -33,7 +33,15 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install pycparser
 
+      - name: Cache generated sources (prepare.py)
+        id: cache-gen
+        uses: actions/cache@v4
+        with:
+          path: build/port/gen-x64
+          key: khdays-gen-x64-${{ hashFiles('external/khdays-decomp/**', 'port/tools/**') }}
+
       - name: Run prepare.py (generate native C sources)
+        if: steps.cache-gen.outputs.cache-hit != 'true'
         run: python port/tools/prepare.py --out build/port/gen-x64
 
       - name: Setup MSBuild
@@ -46,9 +54,9 @@ jobs:
             -G "Visual Studio 17 2022" `
             -A x64 `
             -DCMAKE_SYSTEM_NAME=WindowsStore `
-            -DCMAKE_SYSTEM_VERSION=10.0 `
+            "-DCMAKE_SYSTEM_VERSION=10.0" `
             -DKHDAYS_UWP=ON `
-            -DKHDAYS_GEN="build/port/gen-x64"
+            "-DKHDAYS_GEN=${{ github.workspace }}/build/port/gen-x64"
 
       - name: Generate Certificate & Build UWP Appx Package
         shell: pwsh
