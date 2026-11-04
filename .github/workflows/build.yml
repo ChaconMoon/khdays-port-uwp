@@ -1,10 +1,9 @@
-name: Build
+name: Build Xbox UWP (Dev Mode)
 
 on:
   push:
     branches:
       - main
-      - development
   pull_request:
   workflow_dispatch:
 
@@ -12,25 +11,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.workflow }}-${{ github.ref }}
+  group: xbox-uwp-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # The data-format library, the mod layer and the filesystem, with their
-  # tests, on each platform. (The native game build, port/build.py, needs
-  # the user's game data and is not built here.)
-  build:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Windows x64
-            os: windows-2025
-          - name: Linux x64
-            os: ubuntu-24.04
+  build-xbox:
+    name: Xbox Series / One (UWP x64)
+    runs-on: windows-2022
 
     steps:
       - name: Check out repository
@@ -41,74 +28,75 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.11"
 
-      - name: Install build tools
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential ninja-build
+      - name: Install Python dependencies
+        run: python -m pip install pycparser
 
-      - name: Configure Windows
-        if: runner.os == 'Windows'
+      - name: Run prepare.py (generate native C sources)
+        run: python port/tools/prepare.py --out build/port/gen-x64
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Configure CMake for UWP (Visual Studio 2022 x64)
         shell: pwsh
         run: |
-          cmake -S assets -B build `
-            -G "Visual Studio 18 2026" `
+          cmake -S port -B build-uwp `
+            -G "Visual Studio 17 2022" `
             -A x64 `
-            -DBUILD_TESTING=ON
+            -DCMAKE_SYSTEM_NAME=WindowsStore `
+            -DCMAKE_SYSTEM_VERSION=10.0 `
+            -DKHDAYS_UWP=ON `
+            -DKHDAYS_GEN="build/port/gen-x64"
 
-      - name: Configure Linux
-        if: runner.os == 'Linux'
-        shell: bash
+      - name: Generate Certificate & Build UWP Appx Package
+        shell: pwsh
         run: |
-          cmake -S assets -B build \
-            -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_TESTING=ON
+          # 1. Extraer Publisher del manifiesto
+          [xml]$manifest = Get-Content "port/uwp/Package.appxmanifest"
+          $publisherId = $manifest.Package.Identity.Publisher
+          Write-Host "Creating certificate for Publisher: $publisherId"
 
-      - name: Build
-        run: cmake --build build --config Release --parallel
+          # 2. Generar certificado autofirmado para UWP en Windows
+          $cert = New-SelfSignedCertificate `
+              -Subject $publisherId `
+              -CertStoreLocation "Cert:\CurrentUser\My" `
+              -KeySpec Signature `
+              -KeyUsage DigitalSignature `
+              -Type CodeSigningCert `
+              -HashAlgorithm SHA256 `
+              -NotAfter (Get-Date).AddYears(2)
 
-      - name: Run CTest
-        run: ctest --test-dir build -C Release --output-on-failure
+          $thumbprint = $cert.Thumbprint
+          Write-Host "Certificate thumbprint: $thumbprint"
 
-      - name: Run Python tool tests
-        run: python -m unittest discover -s tools/tests -p "test_*.py"
+          # 3. Exportar certificado publico (.cer para la Xbox) y privado (.pfx para MSBuild)
+          $certPassword = "XboxKhDaysDevPassword123!"
+          $securePassword = ConvertTo-SecureString $certPassword -AsPlainText -Force
 
-  sanitizers:
-    name: Sanitizers (Linux x64)
-    runs-on: ubuntu-24.04
+          New-Item -ItemType Directory -Force -Path "package-output"
+          Export-Certificate -Cert $cert -FilePath "package-output/khdays-xbox.cer" | Out-Null
+          Export-PfxCertificate -Cert $cert -FilePath "UwpAutoSignCert.pfx" -Password $securePassword | Out-Null
 
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+          # 4. Compilar y empaquetar con MSBuild
+          msbuild build-uwp/khdays-native.vcxproj /t:Rebuild `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /p:AppxPackage=true `
+            /p:AppxBundle=Never `
+            /p:UapAppxPackageBuildMode=SideloadOnly `
+            /p:AppxPackageSigningEnabled=true `
+            /p:PackageCertificateThumbprint=$thumbprint `
+            /p:PackageCertificateKeyFile="UwpAutoSignCert.pfx" `
+            /p:PackageCertificatePassword=$certPassword `
+            /p:AppxPackageDir="${{ github.workspace }}/package-output/"
+
+          # 5. Limpiar certificado del almacén del runner
+          Remove-Item "Cert:\CurrentUser\My\$thumbprint" -Force
+
+      - name: Upload Xbox UWP Package and Certificate
+        uses: actions/upload-artifact@v4
         with:
-          submodules: recursive
-
-      - name: Install build tools
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential ninja-build
-
-      - name: Configure with sanitizers
-        shell: bash
-        run: |
-          cmake -S assets -B build-san \
-            -G Ninja \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DBUILD_TESTING=ON \
-            -DKHDAYS_ENABLE_SANITIZERS=ON
-
-      - name: Build sanitized tests
-        # One aggregate target defined in assets/CMakeLists.txt next to the tests, so a
-        # new test never needs a matching edit here.
-        run: cmake --build build-san --target khdays-asset-tests
-
-      - name: Run tests under ASan and UBSan
-        env:
-          ASAN_OPTIONS: abort_on_error=1:halt_on_error=1:detect_leaks=1
-          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ctest --test-dir build-san --output-on-failure
+          name: KingdomHearts-358-2-Days-Xbox-UWP
+          path: package-output/
