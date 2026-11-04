@@ -389,6 +389,39 @@ def main(sdl_dir):
     }
 #endif"""
     )
+
+    # 9. D3D12_CreateDevice: bypass Agility SDK loader on WinRT (avoids unresolved IUnknown_QueryInterface)
+    patch_file(
+        d3d12_c,
+        """#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
+    // A device factory allows a D3D12 redistributable provided by the client to be loaded.
+    ID3D12DeviceFactory *factory = NULL;
+
+    if (SDL_HasProperty(props, SDL_PROP_GPU_DEVICE_CREATE_D3D12_AGILITY_SDK_PATH_STRING) && SDL_HasProperty(props, SDL_PROP_GPU_DEVICE_CREATE_D3D12_AGILITY_SDK_VERSION_NUMBER)) {""",
+        """#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
+    // A device factory allows a D3D12 redistributable provided by the client to be loaded.
+    ID3D12DeviceFactory *factory = NULL;
+
+#if !defined(SDL_PLATFORM_WINRT)
+    if (SDL_HasProperty(props, SDL_PROP_GPU_DEVICE_CREATE_D3D12_AGILITY_SDK_PATH_STRING) && SDL_HasProperty(props, SDL_PROP_GPU_DEVICE_CREATE_D3D12_AGILITY_SDK_VERSION_NUMBER)) {"""
+    )
+
+    patch_file(
+        d3d12_c,
+        """            ID3D12SDKConfiguration_Release(sdk_config);
+        } else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Failed to load vendored D3D12 SDK Configuration");
+        }
+    }
+#endif""",
+        """            ID3D12SDKConfiguration_Release(sdk_config);
+        } else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Failed to load vendored D3D12 SDK Configuration");
+        }
+    }
+#endif
+#endif"""
+    )
     print("All SDL3 UWP patches applied successfully!")
 
 if __name__ == "__main__":
