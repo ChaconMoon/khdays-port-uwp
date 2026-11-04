@@ -199,13 +199,15 @@ int khdays_heaps_touched(KhdaysRef reference, unsigned *rest)
     *rest = heaps_granule - offset % heaps_granule;
     return (heaps_touched[granule / 32] >> (granule % 32) & 1) != 0;
 }
-
+#if !defined(KHDAYS_UWP)
+/* UWP / Xbox Dev Mode: MessageBoxW modal dialog is unsupported in AppContainer sandbox */
 static DWORD WINAPI refused_box(LPVOID text)
 {
     MessageBoxW(NULL, (const wchar_t *)text, L"Kingdom Hearts 358/2 Days (native)",
                 MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST);
     return 0;
 }
+#endif
 
 /* The PC refused more memory: logged and told to the player, then the game stops (exit code 13). */
 static void heaps_refused(unsigned address, DWORD error)
@@ -221,6 +223,7 @@ static void heaps_refused(unsigned address, DWORD error)
     fflush(stderr);
     /* told plainly, not as a crash: Windows' own box (SDL may hold a lock inside an exception handler),
      * from a thread of its own on an ordinary stack */
+#if !defined(KHDAYS_UWP)
     if (getenv("KHDAYS_HEADLESS") == NULL) {
         static wchar_t text[512];
         if (MultiByteToWideChar(CP_UTF8, 0, khdays_text(TXT_OUT_OF_MEMORY), -1, text, 512) > 0) {
@@ -230,6 +233,7 @@ static void heaps_refused(unsigned address, DWORD error)
             }
         }
     }
+#endif
     ExitProcess(13);
 }
 
