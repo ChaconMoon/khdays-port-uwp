@@ -305,7 +305,7 @@ static void sound_service(u32 data, u32 err)
 /* saves/khdays.sav, or saves/player<N>/ for a further player on the PC (host/app/instance.h) */
 static const char *save_file(void)
 {
-    static char path[96];
+    static char path[512];
     if (path[0] == 0) {
         snprintf(path, sizeof(path), "%s/khdays.sav", khdays_host_user_folder());
     }

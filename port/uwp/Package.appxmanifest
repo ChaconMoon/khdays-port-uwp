@@ -50,5 +50,6 @@
   <Capabilities>
     <Capability Name="internetClient" />
     <DeviceCapability Name="microphone" />
+    <rescap:Capability Name="expandedResources" />
   </Capabilities>
 </Package>

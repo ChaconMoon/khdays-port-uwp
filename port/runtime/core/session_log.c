@@ -19,7 +19,7 @@ static int opened_for_setting; /* this log was opened because they did */
 
 static void open_now(void)
 {
-    char path[160];
+    char path[512];
     SYSTEMTIME now;
     /* saves/logs -- a further player's copy on the PC: saves/player<N>/logs */
     const char *folder = khdays_host_user_folder();
