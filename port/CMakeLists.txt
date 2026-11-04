@@ -54,7 +54,7 @@ if(KHDAYS_UWP)
     FetchContent_Declare(
         SDL3
         GIT_REPOSITORY https://github.com/XboxEmulationHub/SDL3-uwp.git
-        GIT_TAG main
+        GIT_TAG release-uwp-3.4.12
     )
 else()
     FetchContent_Declare(
