@@ -603,6 +603,13 @@ target_link_options(khdays-native PRIVATE
     /ENTRY:mainCRTStartup)
 
 endif()
+
+# For UWP / Xbox Dev Mode builds, only the game target (khdays-native) is packaged.
+# Tests, fuzzers, and the standalone server are desktop Win32 tools and not supported/needed in UWP.
+if(KHDAYS_UWP)
+    return()
+endif()
+
 # Renders a DeSmuME savestate's display state and compares it with what
 # DeSmuME showed (port/tools/savestate_gpu.py extracts the input).
 add_executable(khdays-gpu-test tests/savestate_test.c)
@@ -772,8 +779,10 @@ target_compile_options(khdays-sound-test PRIVATE /W4 /std:c17)
 # The native driver's part reads its tables from the ROM's ARM7 binary
 # (the player's, extracted into data/; skipped without it).
 file(GLOB KHDAYS_ARM7_BIN "${CMAKE_CURRENT_SOURCE_DIR}/../data/extracted/*/system/arm7.bin")
-list(GET KHDAYS_ARM7_BIN 0 KHDAYS_ARM7_BIN_FIRST)
-add_test(NAME khdays-sound COMMAND khdays-sound-test "${KHDAYS_ARM7_BIN_FIRST}")
+if(KHDAYS_ARM7_BIN)
+    list(GET KHDAYS_ARM7_BIN 0 KHDAYS_ARM7_BIN_FIRST)
+    add_test(NAME khdays-sound COMMAND khdays-sound-test "${KHDAYS_ARM7_BIN_FIRST}")
+endif()
 
 # Recorded frame packages (KHDAYS_RECORD_FRAMES, in saves/frames: the
 # player's game data, never in the repository) checked against the pictures
