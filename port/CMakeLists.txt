@@ -58,11 +58,24 @@ set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 set(SDL_TESTS OFF CACHE BOOL "" FORCE)
 if(KHDAYS_UWP)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     FetchContent_Declare(
         SDL3
         GIT_REPOSITORY https://github.com/XboxEmulationHub/SDL3-uwp.git
         GIT_TAG release-uwp-3.4.20
     )
+    FetchContent_GetProperties(SDL3)
+    if(NOT sdl3_POPULATED)
+        FetchContent_Populate(SDL3)
+        execute_process(
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/uwp/patch_sdl3.py" "${sdl3_SOURCE_DIR}"
+            RESULT_VARIABLE SDL3_PATCH_RESULT
+        )
+        if(NOT SDL3_PATCH_RESULT EQUAL 0)
+            message(FATAL_ERROR "Failed to patch SDL3 for UWP GPU support")
+        endif()
+        add_subdirectory(${sdl3_SOURCE_DIR} ${sdl3_BINARY_DIR})
+    endif()
 else()
     FetchContent_Declare(
         SDL3
@@ -72,8 +85,8 @@ else()
             SHA256=f07b958a9ac5020fb7a44cadb957f658b2149c3c8abb4f63145fac9303249db7
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
+    FetchContent_MakeAvailable(SDL3)
 endif()
-FetchContent_MakeAvailable(SDL3)
 
 # PNG in and out (the HD replacements and the graphics dump): stb, at the
 # commit THIRD_PARTY_NOTICES.md records (stb has no release tags; a shallow
@@ -587,7 +600,7 @@ if(KHDAYS_UWP)
     set_target_properties(khdays-native PROPERTIES VS_GLOBAL_ROOTNAMESPACE "khdays")
 
     target_link_libraries(khdays-native PRIVATE khdays-gfx khdays-gpu khdays-sound khdays-host-input SDL3::SDL3
-                          mfplat mfreadwrite mfuuid ole32 ws2_32 WindowsApp vccorlib)
+                          mfplat mfreadwrite mfuuid ole32 ws2_32 WindowsApp vccorlib d3d12 dxgi)
     target_link_options(khdays-native PRIVATE
         /DEBUG
         /INCREMENTAL:NO)
