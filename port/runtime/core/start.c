@@ -199,9 +199,20 @@ static void attach_parent_console(void)
 }
 
 #if defined(KHDAYS_UWP)
+static void SDLCALL sdl_log_to_stderr(void *userdata, int category, SDL_LogPriority priority, const char *message)
+{
+    (void)userdata;
+    (void)category;
+    (void)priority;
+    fprintf(stderr, "[SDL] %s\n", message);
+}
+#endif
+
+#if defined(KHDAYS_UWP)
 static int game_worker_entry(void *unused)
 {
     (void)unused;
+    fprintf(stderr, "game_thread: starting emulated context...\n");
     KhdaysContext *game = khdays_context_create(run_game, NULL);
     if (game == NULL) {
         khdays_hal_unimplemented("no context for the game");
@@ -232,6 +243,8 @@ int main(int argc, char **argv)
             setvbuf(stdout, NULL, _IONBF, 0);
         }
         fprintf(stderr, "=== khdays-native Xbox UWP boot log ===\n");
+        SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
+        SDL_SetLogOutputFunction(sdl_log_to_stderr, NULL);
     }
 #endif
 
@@ -267,9 +280,12 @@ int main(int argc, char **argv)
     khdays_host_player_slot();
     /* the multiplayer's server as the player set it, read when a session starts */
     khdays_net_settings_source(khdays_settings_server);
+    fprintf(stderr, "start: calling khdays_runtime_init...\n");
     if (!khdays_runtime_init(argc, argv)) {
+        fprintf(stderr, "start: khdays_runtime_init failed!\n");
         return 1;
     }
+    fprintf(stderr, "start: khdays_runtime_init succeeded\n");
     khdays_log_open();
     khdays_log("%s", working_folder_note);
     khdays_log("the game's memory at %p (its references from there)", (void *)khdays_window);

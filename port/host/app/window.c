@@ -539,10 +539,12 @@ static SDL_Renderer *host_renderer_ptr;
 static int khdays_host_init_core(void)
 {
     KhdaysProfile profile;
+    fprintf(stderr, "host: initializing SDL subsystems...\n");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "host: SDL_Init failed: %s\n", SDL_GetError());
         return 0;
     }
+    fprintf(stderr, "host: SDL_Init succeeded, opening audio...\n");
     khdays_sound_output_open();
     {
         /* The player's settings (or the defaults, the first time). Read first,
@@ -556,23 +558,27 @@ static int khdays_host_init_core(void)
         khdays_savelist_set_settings(profile.save.all_files, profile.save.autosave);
         khdays_stop_set_enabled(profile.gameplay.stop_magic); /* for this run: a change waits for the next */
     }
+    fprintf(stderr, "host: creating window...\n");
     host_window_ptr = open_window(&profile);
     host_window = host_window_ptr;
     display_now(profile.video.display);
     khdays_present_set_video(&profile.video);
+    fprintf(stderr, "host: initializing renderer (khdays_present_open)...\n");
     host_renderer_ptr = host_window_ptr ? khdays_present_open(host_window_ptr, notice) : NULL;
     frame_event = SDL_RegisterEvents(3);
     close_event = frame_event + 1;
     wake_event = frame_event + 2;
     if (host_renderer_ptr == NULL || frame_event == 0) {
-        fprintf(stderr, "host: cannot open the window: %s\n", SDL_GetError());
+        fprintf(stderr, "host: cannot open the window or renderer: %s\n", SDL_GetError());
         return 0;
     }
+    fprintf(stderr, "host: renderer ready, initializing devices...\n");
     khdays_devices_init(&profile, publish);
     khdays_settings_set_graphics_card(khdays_present_gpu());
     tell_game();
     khdays_updates_start(profile.network.check_updates); /* in the background; told of on the title */
     SDL_SetAtomicInt(&started, 1);
+    fprintf(stderr, "host: initialization complete, ready for event loop\n");
     return 1;
 }
 
