@@ -2,7 +2,9 @@
 #include "update_install.h"
 
 #include <windows.h>
+#if !defined(KHDAYS_UWP)
 #include <shellapi.h>
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,7 +22,11 @@ static int under_wine(void)
 
 int khdays_update_install_possible(void)
 {
+#if defined(KHDAYS_UWP)
+    return 0;
+#else
     return !under_wine() && GetFileAttributesW(L"unins000.exe") != INVALID_FILE_ATTRIBUTES;
+#endif
 }
 
 /* The folder, as a wide path with its closing backslash, into `out`: 1, or 0. */
@@ -66,6 +72,11 @@ void khdays_update_install_clean(void)
 
 int khdays_update_install_run(const char *file, char *why, size_t size)
 {
+#if defined(KHDAYS_UWP)
+    (void)file;
+    snprintf(why, size, "automatic updates are not supported on UWP/Xbox");
+    return 0;
+#else
     const int n = MultiByteToWideChar(CP_UTF8, 0, file, -1, NULL, 0);
     const DWORD here_size = GetCurrentDirectoryW(0, NULL);
     wchar_t *wfile = n > 0 ? (wchar_t *)malloc((size_t)n * sizeof(wchar_t)) : NULL;
@@ -110,4 +121,5 @@ done:
     free(here);
     free(wfile);
     return ok;
+#endif
 }

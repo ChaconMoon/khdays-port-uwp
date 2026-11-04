@@ -26,11 +26,15 @@ static unsigned khdays_cpsr_value(void)
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
+#if !defined(KHDAYS_UWP)
 #include <dbghelp.h>
+#endif
 
+static DWORD game_thread_id;
 static HANDLE game_thread;
 static const char *symbol_name(const void *address);
 
+#if !defined(KHDAYS_UWP)
 /* The instruction, stack and frame pointers of a thread's context, and the
  * machine type DbgHelp walks it as. */
 #define CONTEXT_PC(c) ((c)->Rip)
@@ -322,8 +326,6 @@ static int __cdecl on_runtime_check(int type, const wchar_t *file, int line, con
 }
 #endif
 
-static DWORD game_thread_id; /* the thread that runs the game (main's) */
-
 /* Last in the vectored chain: reports an exception no runtime handler took, before the structured
  * handlers see it (a broken chain there would hide it). */
 static LONG CALLBACK on_unhandled_first(EXCEPTION_POINTERS *info)
@@ -459,10 +461,12 @@ static void watch_init(void)
         fprintf(stderr, "watch: %d DS addresses watched for writes\n", watched_count);
     }
 }
+#endif
 
 void khdays_diag_init(void)
 {
     game_thread_id = GetCurrentThreadId();
+#if !defined(KHDAYS_UWP)
     AddVectoredExceptionHandler(0, on_unhandled_first);
     const char *stall = getenv("KHDAYS_STALL_SECONDS");
 #if defined(_DEBUG)
@@ -477,6 +481,7 @@ void khdays_diag_init(void)
                         DUPLICATE_SAME_ACCESS);
         CreateThread(NULL, 0, watchdog, (void *)(size_t)atoi(stall), 0, NULL);
     }
+#endif
 }
 
 /* printf to stderr, for a temporary hook in the game's C (prepare.py HOOKS). */
@@ -491,23 +496,31 @@ void khdays_debugf(const char *format, ...)
 
 void khdays_diag_stack(void)
 {
+#if !defined(KHDAYS_UWP)
     CONTEXT context;
     RtlCaptureContext(&context);
     print_stack(GetCurrentThread(), &context);
+#endif
 }
 
 unsigned long long khdays_diag_symbol(const char *name)
 {
+#if !defined(KHDAYS_UWP)
     char buffer[sizeof(SYMBOL_INFO) + 256];
     SYMBOL_INFO *symbol = (SYMBOL_INFO *)buffer;
     symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
     symbol->MaxNameLen = 255;
     return SymFromName(GetCurrentProcess(), name, symbol) ? (unsigned long long)symbol->Address : 0;
+#else
+    (void)name;
+    return 0;
+#endif
 }
 
 /* The name of the native function at `address`, for traces. */
 static const char *symbol_name(const void *address)
 {
+#if !defined(KHDAYS_UWP)
     static char buffer[sizeof(SYMBOL_INFO) + 256];
     SYMBOL_INFO *symbol = (SYMBOL_INFO *)buffer;
     DWORD64 displacement = 0;
@@ -534,6 +547,14 @@ static const char *symbol_name(const void *address)
         }
     }
     return "?";
+#else
+    static char where[32];
+    if (address == NULL) {
+        return "-";
+    }
+    snprintf(where, sizeof(where), "%p", address);
+    return where;
+#endif
 }
 
 const char *khdays_diag_function_at(const void *address)
@@ -543,6 +564,7 @@ const char *khdays_diag_function_at(const void *address)
 
 void khdays_diag_callers(char *out, int size, int skip)
 {
+#if !defined(KHDAYS_UWP)
     void *frames[24];
     const USHORT count = CaptureStackBackTrace((DWORD)skip + 1, 24, frames, NULL);
     out[0] = '\0';
@@ -552,6 +574,11 @@ void khdays_diag_callers(char *out, int size, int skip)
         }
         strncat_s(out, (size_t)size, symbol_name(frames[i]), _TRUNCATE);
     }
+#else
+    (void)size;
+    (void)skip;
+    out[0] = '\0';
+#endif
 }
 
 /* KHDAYS_TRACE_SCRIPT: prints each step of the action-script interpreter (func_02020e58) that differs
