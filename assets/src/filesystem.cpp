@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <unordered_map>
 #include <vector>
 
 namespace khdays::vfs {
@@ -14,12 +15,14 @@ namespace {
 std::filesystem::path g_data_root{};
 std::filesystem::path g_mods_root{"mods"};
 std::vector<std::filesystem::path> g_cached_mods;
+std::unordered_map<std::string, std::filesystem::path> g_cached_mod_files;
 bool g_mods_scanned = false;
 
 const std::vector<std::filesystem::path>& get_mods() {
     if (!g_mods_scanned) {
         g_mods_scanned = true;
         g_cached_mods.clear();
+        g_cached_mod_files.clear();
         std::error_code ec;
         if (std::filesystem::is_directory(g_mods_root, ec)) {
             for (const auto& entry : std::filesystem::directory_iterator(g_mods_root, ec)) {
@@ -36,6 +39,22 @@ const std::vector<std::filesystem::path>& get_mods() {
             }
         }
         std::sort(g_cached_mods.begin(), g_cached_mods.end());
+
+        // Pre-index any files/ subfolder in mods to eliminate synchronous disk queries during boot
+        for (const auto& mod : g_cached_mods) {
+            const auto files_dir = mod / "files";
+            if (std::filesystem::is_directory(files_dir, ec)) {
+                for (const auto& file_entry : std::filesystem::recursive_directory_iterator(files_dir, ec)) {
+                    if (file_entry.is_regular_file(ec)) {
+                        auto rel_p = std::filesystem::relative(file_entry.path(), files_dir, ec);
+                        std::string key = rel_p.generic_string();
+                        if (g_cached_mod_files.find(key) == g_cached_mod_files.end()) {
+                            g_cached_mod_files.emplace(std::move(key), file_entry.path());
+                        }
+                    }
+                }
+            }
+        }
     }
     return g_cached_mods;
 }
@@ -74,6 +93,15 @@ bool is_file(const std::filesystem::path& path) {
 }  // namespace
 
 std::optional<std::filesystem::path> find_in_mods(const std::filesystem::path& rel) {
+    get_mods();
+    const std::string gen = rel.generic_string();
+    if (gen.rfind("files/", 0) == 0) {
+        const auto it = g_cached_mod_files.find(gen.substr(6));
+        if (it != g_cached_mod_files.end()) {
+            return it->second;
+        }
+        return std::nullopt;
+    }
     const auto& mods = get_mods();
     if (mods.empty()) {
         return std::nullopt;
@@ -91,7 +119,12 @@ namespace {
 
 // Mod overrides: mods/<Mod>/files/<rel>, mods visited in sorted order.
 std::optional<std::filesystem::path> find_mod_file(const std::filesystem::path& rel) {
-    return find_in_mods(std::filesystem::path("files") / rel);
+    get_mods();
+    const auto it = g_cached_mod_files.find(rel.generic_string());
+    if (it != g_cached_mod_files.end()) {
+        return it->second;
+    }
+    return std::nullopt;
 }
 
 }  // namespace
@@ -107,6 +140,7 @@ const std::filesystem::path& data_root() {
 void set_mods_root(const std::filesystem::path& root) {
     g_mods_root = root;
     g_mods_scanned = false;
+    g_cached_mod_files.clear();
 }
 
 bool autodetect_data_root(const std::filesystem::path& extracted_dir) {
@@ -160,10 +194,7 @@ std::optional<std::filesystem::path> resolve_original(std::string_view game_path
         return mod;
     }
     if (!g_data_root.empty()) {
-        const auto raw = g_data_root / "nitrofs" / *rel;
-        if (is_file(raw)) {
-            return raw;
-        }
+        return g_data_root / "nitrofs" / *rel;
     }
     return std::nullopt;
 }

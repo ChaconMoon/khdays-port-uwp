@@ -588,7 +588,7 @@ def main(sdl_dir):
         """void SDL_WasapiDeviceEventHandler::WaitForCompletion()
 {
     if (this->completed_semaphore) {
-        SDL_WaitSemaphoreTimeout(this->completed_semaphore, 10000);
+        SDL_WaitSemaphoreTimeout(this->completed_semaphore, 300);
         SDL_DestroySemaphore(this->completed_semaphore);
         this->completed_semaphore = nullptr;
     }
@@ -607,10 +607,66 @@ def main(sdl_dir):
         """void SDL_WasapiActivationHandler::WaitForCompletion()
 {
     if (completion_semaphore) {
-        SDL_WaitSemaphoreTimeout(completion_semaphore, 10000);
+        SDL_WaitSemaphoreTimeout(completion_semaphore, 3000);
         SDL_DestroySemaphore(completion_semaphore);
         completion_semaphore = NULL;
     }
+}"""
+    )
+
+    # 12. WASAPI WinRT: ensure default playback device fallback on Xbox
+    patch_file(
+        wasapi_cpp,
+        """void WASAPI_EnumerateEndpoints(SDL_AudioDevice **default_playback, SDL_AudioDevice **default_recording)
+{
+    Platform::String ^ defdevid;
+
+    // DeviceWatchers will fire an Added event for each existing device at
+    //  startup, so we don't need to enumerate them separately before
+    //  listening for updates.
+    playback_device_event_handler = new SDL_WasapiDeviceEventHandler(false);
+    playback_device_event_handler->WaitForCompletion();
+    defdevid = MediaDevice::GetDefaultAudioRenderId(AudioDeviceRole::Default);
+    if (defdevid) {
+        *default_playback = FindWinRTAudioDevice(defdevid->Data());
+    }
+
+    recording_device_event_handler = new SDL_WasapiDeviceEventHandler(true);
+    recording_device_event_handler->WaitForCompletion();
+    defdevid = MediaDevice::GetDefaultAudioCaptureId(AudioDeviceRole::Default);
+    if (defdevid) {
+        *default_recording = FindWinRTAudioDevice(defdevid->Data());
+    }
+}""",
+        """void WASAPI_EnumerateEndpoints(SDL_AudioDevice **default_playback, SDL_AudioDevice **default_recording)
+{
+    Platform::String ^ defdevid;
+
+    playback_device_event_handler = new SDL_WasapiDeviceEventHandler(false);
+    playback_device_event_handler->WaitForCompletion();
+    try {
+        defdevid = MediaDevice::GetDefaultAudioRenderId(AudioDeviceRole::Default);
+        if (defdevid) {
+            *default_playback = FindWinRTAudioDevice(defdevid->Data());
+        }
+    } catch (...) {}
+
+    if (*default_playback == nullptr) {
+        LPCWSTR id_str = (defdevid && !defdevid->IsEmpty()) ? defdevid->Data() : L"{e6327cad-dcec-4949-ae8a-991e976a79d2}";
+        LPWSTR devid = SDL_wcsdup(id_str);
+        if (devid) {
+            *default_playback = SDL_AddAudioDevice(false, "Xbox Audio Output", NULL, devid);
+        }
+    }
+
+    recording_device_event_handler = new SDL_WasapiDeviceEventHandler(true);
+    recording_device_event_handler->WaitForCompletion();
+    try {
+        defdevid = MediaDevice::GetDefaultAudioCaptureId(AudioDeviceRole::Default);
+        if (defdevid) {
+            *default_recording = FindWinRTAudioDevice(defdevid->Data());
+        }
+    } catch (...) {}
 }"""
     )
 
