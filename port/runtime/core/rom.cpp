@@ -220,6 +220,17 @@ extern "C" int khdays_rom_init(void)
             SDL_free(pref);
         }
     }
+
+    // UWP / Xbox Dev Mode: set mods root to LocalState/mods if present
+    const char *local_folder = SDL_GetWinRTFSPath(SDL_WINRT_PATH_LOCAL_FOLDER);
+    if (local_folder != nullptr) {
+        std::error_code ec;
+        const fs::path local_mods = fs::path(local_folder) / "mods";
+        if (fs::is_directory(local_mods, ec)) {
+            khdays::vfs::set_mods_root(local_mods);
+            std::fprintf(stderr, "rom: using mods from LocalState/mods\n");
+        }
+    }
 #endif
     if (!found) {
         std::error_code ec;
@@ -300,7 +311,13 @@ extern "C" int khdays_rom_init(void)
             const u32 bytes = static_cast<u32>(worded.size());
             files[id] = {*path, bytes, std::move(worded)};
         } else {
-            files[id] = {*path, static_cast<u32>(fs::file_size(*path)), {}};
+            const u32 fat_size = end >= start ? (end - start) : 0;
+            u32 size = fat_size;
+            // Only query disk file_size if the path is not from the original nitrofs
+            if (path->generic_string().find("nitrofs") == std::string::npos) {
+                size = static_cast<u32>(fs::file_size(*path));
+            }
+            files[id] = {*path, size, {}};
         }
         const u32 size = files[id].size;
         game_paths[id] = game_path;

@@ -13,6 +13,32 @@ namespace {
 
 std::filesystem::path g_data_root{};
 std::filesystem::path g_mods_root{"mods"};
+std::vector<std::filesystem::path> g_cached_mods;
+bool g_mods_scanned = false;
+
+const std::vector<std::filesystem::path>& get_mods() {
+    if (!g_mods_scanned) {
+        g_mods_scanned = true;
+        g_cached_mods.clear();
+        std::error_code ec;
+        if (std::filesystem::is_directory(g_mods_root, ec)) {
+            for (const auto& entry : std::filesystem::directory_iterator(g_mods_root, ec)) {
+                if (entry.is_directory(ec)) {
+                    g_cached_mods.push_back(entry.path());
+                }
+            }
+        }
+        if (g_mods_root != "mods" && std::filesystem::is_directory("mods", ec)) {
+            for (const auto& entry : std::filesystem::directory_iterator("mods", ec)) {
+                if (entry.is_directory(ec)) {
+                    g_cached_mods.push_back(entry.path());
+                }
+            }
+        }
+        std::sort(g_cached_mods.begin(), g_cached_mods.end());
+    }
+    return g_cached_mods;
+}
 
 // Normalize a game path to a relative path: strip leading slashes, unify
 // separators, and reject any component that would escape the root.
@@ -48,17 +74,10 @@ bool is_file(const std::filesystem::path& path) {
 }  // namespace
 
 std::optional<std::filesystem::path> find_in_mods(const std::filesystem::path& rel) {
-    std::error_code ec;
-    if (!std::filesystem::is_directory(g_mods_root, ec)) {
+    const auto& mods = get_mods();
+    if (mods.empty()) {
         return std::nullopt;
     }
-    std::vector<std::filesystem::path> mods;
-    for (const auto& entry : std::filesystem::directory_iterator(g_mods_root, ec)) {
-        if (entry.is_directory(ec)) {
-            mods.push_back(entry.path());
-        }
-    }
-    std::sort(mods.begin(), mods.end());
     for (const auto& mod : mods) {
         const auto candidate = mod / rel;
         if (is_file(candidate)) {
@@ -87,6 +106,7 @@ const std::filesystem::path& data_root() {
 
 void set_mods_root(const std::filesystem::path& root) {
     g_mods_root = root;
+    g_mods_scanned = false;
 }
 
 bool autodetect_data_root(const std::filesystem::path& extracted_dir) {

@@ -538,10 +538,12 @@ static SDL_Renderer *host_renderer_ptr;
 static KhdaysSound host_sound_settings;
 
 #if defined(KHDAYS_UWP)
+#include <roapi.h>
 static int audio_init_worker(void *unused)
 {
     (void)unused;
-    fprintf(stderr, "host: background audio worker starting...\n");
+    HRESULT hr = RoInitialize(RO_INIT_MULTITHREADED);
+    fprintf(stderr, "host: background audio worker starting (RoInitialize: 0x%08X)...\n", (unsigned int)hr);
     fflush(stderr);
     khdays_sound_output_open();
     khdays_sound_output_set(&host_sound_settings);
@@ -555,6 +557,9 @@ static int khdays_host_init_core(void)
 {
     KhdaysProfile profile;
     fprintf(stderr, "host: initializing SDL subsystems...\n");
+#if defined(KHDAYS_UWP)
+    SDL_SetHint(SDL_HINT_JOYSTICK_WGI, "1");
+#endif
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "host: SDL_Init failed: %s\n", SDL_GetError());
         return 0;

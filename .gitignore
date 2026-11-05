@@ -21,6 +21,7 @@ compile_commands.json
 
 # Local game data — never commit
 /data/
+/mods/
 /setup/
 /roms/
 /assets-extracted/
@@ -29,6 +30,7 @@ compile_commands.json
 *.srl
 *.rom
 *.sav
+*.zip
 # The player's save and settings (saves/settings.ini)
 /saves/
 

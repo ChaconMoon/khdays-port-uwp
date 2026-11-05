@@ -34,6 +34,11 @@ def main(sdl_dir):
         "if(SDL_GPU AND NOT WINDOWS_STORE)\n  if(HAVE_D3D11_H)",
         "if(SDL_GPU)\n  if(HAVE_D3D11_H AND NOT WINDOWS_STORE)"
     )
+    patch_file(
+        cmakelists,
+        "    if(HAVE_WINDOWS_GAMING_INPUT_H)\n      set(SDL_JOYSTICK_WGI 1)\n    endif()",
+        "    if(HAVE_WINDOWS_GAMING_INPUT_H OR WINDOWS_STORE)\n      set(SDL_JOYSTICK_WGI 1)\n    endif()"
+    )
 
     d3d12_c = os.path.join(sdl_dir, "src", "gpu", "d3d12", "SDL_gpu_d3d12.c")
 
@@ -550,6 +555,65 @@ def main(sdl_dir):
 #endif
 #endif"""
     )
+    # 10. WGI Joystick: enable WGI by default on WinRT
+    wgi_c = os.path.join(sdl_dir, "src", "joystick", "windows", "SDL_windows_gaming_input.c")
+    patch_file(
+        wgi_c,
+        """    if (!SDL_GetHintBoolean(SDL_HINT_JOYSTICK_WGI, false)) {
+        return true;
+    }""",
+        """#ifdef SDL_PLATFORM_WINRT
+    if (!SDL_GetHintBoolean(SDL_HINT_JOYSTICK_WGI, true)) {
+        return true;
+    }
+#else
+    if (!SDL_GetHintBoolean(SDL_HINT_JOYSTICK_WGI, false)) {
+        return true;
+    }
+#endif"""
+    )
+
+    # 11. WASAPI WinRT: use non-infinite timeout on semaphores to prevent Xbox device enumeration deadlocks
+    wasapi_cpp = os.path.join(sdl_dir, "src", "audio", "wasapi", "SDL_wasapi_winrt.cpp")
+    patch_file(
+        wasapi_cpp,
+        """void SDL_WasapiDeviceEventHandler::WaitForCompletion()
+{
+    if (this->completed_semaphore) {
+        SDL_WaitSemaphore(this->completed_semaphore);
+        SDL_DestroySemaphore(this->completed_semaphore);
+        this->completed_semaphore = nullptr;
+    }
+}""",
+        """void SDL_WasapiDeviceEventHandler::WaitForCompletion()
+{
+    if (this->completed_semaphore) {
+        SDL_WaitSemaphoreTimeout(this->completed_semaphore, 3000);
+        SDL_DestroySemaphore(this->completed_semaphore);
+        this->completed_semaphore = nullptr;
+    }
+}"""
+    )
+    patch_file(
+        wasapi_cpp,
+        """void SDL_WasapiActivationHandler::WaitForCompletion()
+{
+    if (completion_semaphore) {
+        SDL_WaitSemaphore(completion_semaphore);
+        SDL_DestroySemaphore(completion_semaphore);
+        completion_semaphore = NULL;
+    }
+}""",
+        """void SDL_WasapiActivationHandler::WaitForCompletion()
+{
+    if (completion_semaphore) {
+        SDL_WaitSemaphoreTimeout(completion_semaphore, 3000);
+        SDL_DestroySemaphore(completion_semaphore);
+        completion_semaphore = NULL;
+    }
+}"""
+    )
+
     print("All SDL3 UWP patches applied successfully!")
 
 if __name__ == "__main__":
