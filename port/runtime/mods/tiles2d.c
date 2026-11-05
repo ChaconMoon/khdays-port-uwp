@@ -173,12 +173,16 @@ static void map_page(const u8 *at, int bank, u32 bank_offset, int hd, int by_she
             u32 length = sheet.tile_bytes;
             if (offset + k * 32u < sheet.tiles_at || tile >= sheet.tiles)
                 break;
-            if (id < 0 || at_sheet % sheet.tile_bytes != 0)
+            if (id < 0)
                 continue;
-            if (length > (KHDAYS_TILES2D_PAGE_WORDS - u) * 32u)
-                length = (KHDAYS_TILES2D_PAGE_WORDS - u) * 32u;
-            if (memcmp(at + u * 32u, sheet.data + (size_t)tile * sheet.tile_bytes, length) != 0) {
-                continue; /* the game drew over it: its own */
+            if (at_sheet % sheet.tile_bytes == 0) {
+                if (length > (KHDAYS_TILES2D_PAGE_WORDS - u) * 32u)
+                    length = (KHDAYS_TILES2D_PAGE_WORDS - u) * 32u;
+                if (memcmp(at + u * 32u, sheet.data + (size_t)tile * sheet.tile_bytes, length) != 0) {
+                    continue; /* the game drew over it: its own */
+                }
+            } else if (u > 0 && out[u - 1] == 0) {
+                continue; /* previous unit of this tile was not matched */
             }
             out[u] = (uint32_t)(id + 1) << 20 | tile;
         }

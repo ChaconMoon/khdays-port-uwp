@@ -573,27 +573,86 @@ def main(sdl_dir):
 #endif"""
     )
 
-    # 11. WASAPI WinRT: use non-infinite timeout on semaphores to prevent Xbox device enumeration deadlocks
+    # 11. WASAPI WinRT: COM MTA initialization and Xbox audio endpoint activation
     wasapi_cpp = os.path.join(sdl_dir, "src", "audio", "wasapi", "SDL_wasapi_winrt.cpp")
+
+    # 11a. PlatformInit / PlatformDeinit: initialize COM multithreaded (MTA) on ManagementThread
     patch_file(
         wasapi_cpp,
-        """void SDL_WasapiDeviceEventHandler::WaitForCompletion()
+        """bool WASAPI_PlatformInit(void)
 {
-    if (this->completed_semaphore) {
-        SDL_WaitSemaphore(this->completed_semaphore);
-        SDL_DestroySemaphore(this->completed_semaphore);
-        this->completed_semaphore = nullptr;
-    }
+    return true;
+}
+
+static void StopWasapiHotplug(void)
+{
+    delete playback_device_event_handler;
+    playback_device_event_handler = nullptr;
+    delete recording_device_event_handler;
+    recording_device_event_handler = nullptr;
+}
+
+void WASAPI_PlatformDeinit(void)
+{
+    StopWasapiHotplug();
 }""",
-        """void SDL_WasapiDeviceEventHandler::WaitForCompletion()
+        """bool WASAPI_PlatformInit(void)
 {
-    if (this->completed_semaphore) {
-        SDL_WaitSemaphoreTimeout(this->completed_semaphore, 300);
-        SDL_DestroySemaphore(this->completed_semaphore);
-        this->completed_semaphore = nullptr;
+    HRESULT hr = RoInitialize(RO_INIT_MULTITHREADED);
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) {
+        return WIN_SetErrorFromHRESULT("RoInitialize failed", hr);
     }
+    return true;
+}
+
+static void StopWasapiHotplug(void)
+{
+    delete playback_device_event_handler;
+    playback_device_event_handler = nullptr;
+    delete recording_device_event_handler;
+    recording_device_event_handler = nullptr;
+}
+
+void WASAPI_PlatformDeinit(void)
+{
+    StopWasapiHotplug();
+    RoUninitialize();
 }"""
     )
+
+    # 11b. PlatformThreadInit / PlatformThreadDeinit: initialize COM MTA on the audio playback thread
+    patch_file(
+        wasapi_cpp,
+        """void WASAPI_PlatformThreadInit(SDL_AudioDevice *device)
+{
+    // !!! FIXME: set this thread to "Pro Audio" priority.
+    SDL_SetCurrentThreadPriority(device->recording ? SDL_THREAD_PRIORITY_HIGH : SDL_THREAD_PRIORITY_TIME_CRITICAL);
+}
+
+void WASAPI_PlatformThreadDeinit(SDL_AudioDevice *device)
+{
+    // !!! FIXME: set this thread to "Pro Audio" priority.
+}""",
+        """void WASAPI_PlatformThreadInit(SDL_AudioDevice *device)
+{
+    RoInitialize(RO_INIT_MULTITHREADED);
+    SDL_SetCurrentThreadPriority(device->recording ? SDL_THREAD_PRIORITY_HIGH : SDL_THREAD_PRIORITY_TIME_CRITICAL);
+}
+
+void WASAPI_PlatformThreadDeinit(SDL_AudioDevice *device)
+{
+    RoUninitialize();
+}"""
+    )
+
+    # 11c. SDL_WasapiActivationHandler: implement IAgileObject to enable cross-apartment callback dispatch
+    patch_file(
+        wasapi_cpp,
+        """class SDL_WasapiActivationHandler : public RuntimeClass<RuntimeClassFlags<ClassicCom>, FtmBase, IActivateAudioInterfaceCompletionHandler>""",
+        """class SDL_WasapiActivationHandler : public RuntimeClass<RuntimeClassFlags<ClassicCom>, FtmBase, IActivateAudioInterfaceCompletionHandler, IAgileObject>"""
+    )
+
+    # 11d. WaitForCompletion: use timeout to prevent indefinite hangs
     patch_file(
         wasapi_cpp,
         """void SDL_WasapiActivationHandler::WaitForCompletion()
@@ -607,14 +666,14 @@ def main(sdl_dir):
         """void SDL_WasapiActivationHandler::WaitForCompletion()
 {
     if (completion_semaphore) {
-        SDL_WaitSemaphoreTimeout(completion_semaphore, 3000);
+        SDL_WaitSemaphoreTimeout(completion_semaphore, 2000);
         SDL_DestroySemaphore(completion_semaphore);
         completion_semaphore = NULL;
     }
 }"""
     )
 
-    # 12. WASAPI WinRT: ensure default playback device fallback on Xbox
+    # 12. WASAPI WinRT: instant enumeration without waiting on broken DeviceWatchers, providing default Xbox endpoint
     patch_file(
         wasapi_cpp,
         """void WASAPI_EnumerateEndpoints(SDL_AudioDevice **default_playback, SDL_AudioDevice **default_recording)
@@ -640,10 +699,7 @@ def main(sdl_dir):
 }""",
         """void WASAPI_EnumerateEndpoints(SDL_AudioDevice **default_playback, SDL_AudioDevice **default_recording)
 {
-    Platform::String ^ defdevid;
-
-    playback_device_event_handler = new SDL_WasapiDeviceEventHandler(false);
-    playback_device_event_handler->WaitForCompletion();
+    Platform::String ^ defdevid = nullptr;
     try {
         defdevid = MediaDevice::GetDefaultAudioRenderId(AudioDeviceRole::Default);
         if (defdevid) {
@@ -652,20 +708,15 @@ def main(sdl_dir):
     } catch (...) {}
 
     if (*default_playback == nullptr) {
-        LPCWSTR id_str = (defdevid && !defdevid->IsEmpty()) ? defdevid->Data() : L"{e6327cad-dcec-4949-ae8a-991e976a79d2}";
+        LPCWSTR id_str = (defdevid && !defdevid->IsEmpty()) ? defdevid->Data() : L"{E6327CAD-DCEC-4949-AE8A-991E976A79D2}";
         LPWSTR devid = SDL_wcsdup(id_str);
         if (devid) {
             *default_playback = SDL_AddAudioDevice(false, "Xbox Audio Output", NULL, devid);
         }
     }
 
-    recording_device_event_handler = new SDL_WasapiDeviceEventHandler(true);
-    recording_device_event_handler->WaitForCompletion();
     try {
-        defdevid = MediaDevice::GetDefaultAudioCaptureId(AudioDeviceRole::Default);
-        if (defdevid) {
-            *default_recording = FindWinRTAudioDevice(defdevid->Data());
-        }
+        playback_device_event_handler = new SDL_WasapiDeviceEventHandler(false);
     } catch (...) {}
 }"""
     )

@@ -508,6 +508,7 @@ static uint32_t build_tiles(const KhdaysG3dList *list, const KhdaysG3dVertex *ve
     for (int i = 0; i < list->npolys; ++i) {
         const KhdaysG3dPolygon *p = &list->polys[i];
         float xmin = 1e9f, xmax = -1e9f;
+        float ymin = p->ymin, ymax = p->ymax;
         int tx0, tx1, ty0, ty1;
         if (unusable(list, p)) {
             box[i][0] = 1;
@@ -516,13 +517,16 @@ static uint32_t build_tiles(const KhdaysG3dList *list, const KhdaysG3dVertex *ve
         }
         for (int k = 0; k < p->count; ++k) {
             const float x = vertices[p->first + k].x - (float)origin_x;
+            const float y = vertices[p->first + k].y;
             xmin = x < xmin ? x : xmin;
             xmax = x > xmax ? x : xmax;
+            ymin = y < ymin ? y : ymin;
+            ymax = y > ymax ? y : ymax;
         }
-        tx0 = (int)floorf((xmin - 1.0f) / TILE);
-        tx1 = (int)floorf((xmax + 1.0f) / TILE);
-        ty0 = (int)floorf((p->ymin - 1.0f) / TILE);
-        ty1 = (int)floorf((p->ymax + 1.0f) / TILE);
+        tx0 = (int)floorf((xmin - 2.0f) / TILE);
+        tx1 = (int)floorf((xmax + 2.0f) / TILE);
+        ty0 = (int)floorf((ymin - 2.0f) / TILE);
+        ty1 = (int)floorf((ymax + 2.0f) / TILE);
         tx0 = tx0 < 0 ? 0 : tx0;
         ty0 = ty0 < 0 ? 0 : ty0;
         tx1 = tx1 > tiles_x - 1 ? tiles_x - 1 : tx1;

@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 /* The map has a word for each 32 bytes (a tile of 4 bits a pixel; a tile
- * of 8 has its word at its first 32) of the 2D memory's first
+ * of 8 has its words at each constituent 32) of the 2D memory's first
  * KHDAYS_TILES2D_PAGES pages of 16 KB: engine A's layers and sprites,
  * engine B's (frame_package.h KHDAYS_2D_ABG to KHDAYS_2D_BOBJ). */
 #define KHDAYS_TILES2D_PAGE_WORDS 512
