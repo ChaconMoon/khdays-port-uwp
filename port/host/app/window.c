@@ -538,12 +538,14 @@ static SDL_Renderer *host_renderer_ptr;
 static KhdaysSound host_sound_settings;
 
 #if defined(KHDAYS_UWP)
-#include <roapi.h>
+__declspec(dllimport) long __stdcall RoInitialize(int initType);
+__declspec(dllimport) void __stdcall RoUninitialize(void);
+
 static int audio_init_worker(void *unused)
 {
     (void)unused;
-    HRESULT hr = RoInitialize(RO_INIT_MULTITHREADED);
-    fprintf(stderr, "host: background audio worker starting (RoInitialize: 0x%08X)...\n", (unsigned int)hr);
+    long hr = RoInitialize(1 /* RO_INIT_MULTITHREADED */);
+    fprintf(stderr, "host: background audio worker starting (RoInitialize: 0x%08lX)...\n", hr);
     fflush(stderr);
     khdays_sound_output_open();
     khdays_sound_output_set(&host_sound_settings);
