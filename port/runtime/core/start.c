@@ -205,6 +205,7 @@ static void SDLCALL sdl_log_to_stderr(void *userdata, int category, SDL_LogPrior
     (void)category;
     (void)priority;
     fprintf(stderr, "[SDL] %s\n", message);
+    fflush(stderr);
 }
 #endif
 
@@ -213,6 +214,7 @@ static int game_worker_entry(void *unused)
 {
     (void)unused;
     fprintf(stderr, "game_thread: starting emulated context...\n");
+    fflush(stderr);
     KhdaysContext *game = khdays_context_create(run_game, NULL);
     if (game == NULL) {
         khdays_hal_unimplemented("no context for the game");
@@ -230,19 +232,17 @@ int main(int argc, char **argv)
 #endif
 {
 #if defined(KHDAYS_UWP)
-    /* UWP / Xbox Dev Mode: redirect stderr and stdout to khdays_boot.log in LocalState */
+    /* UWP / Xbox Dev Mode: redirect stderr to khdays_boot.log in LocalState */
     const char *local_dir = SDL_GetWinRTFSPath(SDL_WINRT_PATH_LOCAL_FOLDER);
     if (local_dir != NULL) {
         char boot_log_path[512];
-        FILE *log_fp = NULL;
+        FILE *err_fp = NULL;
         snprintf(boot_log_path, sizeof(boot_log_path), "%s\\khdays_boot.log", local_dir);
-        if (freopen_s(&log_fp, boot_log_path, "w", stderr) == 0 && log_fp != NULL) {
+        if (freopen_s(&err_fp, boot_log_path, "w", stderr) == 0 && err_fp != NULL) {
             setvbuf(stderr, NULL, _IONBF, 0);
         }
-        if (freopen_s(&log_fp, boot_log_path, "a", stdout) == 0 && log_fp != NULL) {
-            setvbuf(stdout, NULL, _IONBF, 0);
-        }
         fprintf(stderr, "=== khdays-native Xbox UWP boot log ===\n");
+        fflush(stderr);
         SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
         SDL_SetLogOutputFunction(sdl_log_to_stderr, NULL);
     }

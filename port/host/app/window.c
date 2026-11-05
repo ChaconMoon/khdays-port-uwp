@@ -547,6 +547,13 @@ static int audio_init_worker(void *unused)
     long hr = RoInitialize(1 /* RO_INIT_MULTITHREADED */);
     fprintf(stderr, "host: background audio worker starting (RoInitialize: 0x%08lX)...\n", hr);
     fflush(stderr);
+    if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+        fprintf(stderr, "host: SDL_InitSubSystem(SDL_INIT_AUDIO) failed: %s\n", SDL_GetError());
+        fflush(stderr);
+        return 0;
+    }
+    fprintf(stderr, "host: SDL_InitSubSystem(SDL_INIT_AUDIO) succeeded\n");
+    fflush(stderr);
     khdays_sound_output_open();
     khdays_sound_output_set(&host_sound_settings);
     fprintf(stderr, "host: background audio worker finished\n");
@@ -559,14 +566,19 @@ static int khdays_host_init_core(void)
 {
     KhdaysProfile profile;
     fprintf(stderr, "host: initializing SDL subsystems...\n");
+    fflush(stderr);
 #if defined(KHDAYS_UWP)
     SDL_SetHint(SDL_HINT_JOYSTICK_WGI, "1");
-#endif
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
+#else
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
+#endif
         fprintf(stderr, "host: SDL_Init failed: %s\n", SDL_GetError());
+        fflush(stderr);
         return 0;
     }
     fprintf(stderr, "host: SDL_Init succeeded\n");
+    fflush(stderr);
     {
         /* The player's settings (or the defaults, the first time). Read first,
          * so that the window speaks the player's language. */

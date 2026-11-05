@@ -98,7 +98,27 @@ void khdays_sound_output_open(void)
     SDL_AudioSpec device;
     fprintf(stderr, "host: calling SDL_OpenAudioDeviceStream...\n");
     fflush(stderr);
-    SDL_AudioStream *stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &input, NULL, NULL);
+    SDL_AudioDeviceID dev_id = SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK;
+    SDL_AudioStream *stream = SDL_OpenAudioDeviceStream(dev_id, &input, NULL, NULL);
+    if (stream == NULL) {
+        fprintf(stderr, "host: default audio playback device stream open failed: %s\n", SDL_GetError());
+        fflush(stderr);
+        int dev_count = 0;
+        SDL_AudioDeviceID *devices = SDL_GetAudioPlaybackDevices(&dev_count);
+        fprintf(stderr, "host: enumerated %d playback devices\n", dev_count);
+        fflush(stderr);
+        if (devices != NULL && dev_count > 0) {
+            for (int i = 0; i < dev_count; ++i) {
+                const char *dname = SDL_GetAudioDeviceName(devices[i]);
+                fprintf(stderr, "host: playback device [%d]: id=%u, name=%s\n", i, (unsigned)devices[i], dname ? dname : "unknown");
+                fflush(stderr);
+            }
+            fprintf(stderr, "host: attempting to open first playback device (%u)...\n", (unsigned)devices[0]);
+            fflush(stderr);
+            stream = SDL_OpenAudioDeviceStream(devices[0], &input, NULL, NULL);
+            SDL_free(devices);
+        }
+    }
     if (stream == NULL) {
         fprintf(stderr, "host: no sound: %s\n", SDL_GetError());
         fflush(stderr);

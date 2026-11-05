@@ -588,7 +588,7 @@ def main(sdl_dir):
         """void SDL_WasapiDeviceEventHandler::WaitForCompletion()
 {
     if (this->completed_semaphore) {
-        SDL_WaitSemaphoreTimeout(this->completed_semaphore, 3000);
+        SDL_WaitSemaphoreTimeout(this->completed_semaphore, 10000);
         SDL_DestroySemaphore(this->completed_semaphore);
         this->completed_semaphore = nullptr;
     }
@@ -607,7 +607,7 @@ def main(sdl_dir):
         """void SDL_WasapiActivationHandler::WaitForCompletion()
 {
     if (completion_semaphore) {
-        SDL_WaitSemaphoreTimeout(completion_semaphore, 3000);
+        SDL_WaitSemaphoreTimeout(completion_semaphore, 10000);
         SDL_DestroySemaphore(completion_semaphore);
         completion_semaphore = NULL;
     }
